@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Services\CoursService;
@@ -13,15 +15,20 @@ class CoursController extends Controller
     ) {}
 
     /**
-     * Page d'accueil : liste des catégories
+     * Page d'accueil : liste des catégories avec stats
      */
     public function index(): View
     {
         $categories = $this->coursService->getCategories();
 
+        // Calcul du nombre total de cours (compatible Collection Laravel)
+        $totalCours = $categories->sum('lessonsCount');
+
         return view('cours.index', [
             'categories' => $categories,
+            'totalCours' => $totalCours,
             'pageTitle' => 'Tous les cours - Jackadit.com',
+            'metaDescription' => 'Découvrez nos cours complets de développement web : PHP, MySQL, Accessibilité et plus encore.',
         ]);
     }
 
@@ -43,6 +50,7 @@ class CoursController extends Controller
             'category' => $category,
             'lessons' => $lessons,
             'pageTitle' => $intro['title'] . ' - Jackadit.com',
+            'metaDescription' => $intro['description'] ?? 'Cours complet sur ' . $intro['title'],
         ]);
     }
 
@@ -69,6 +77,7 @@ class CoursController extends Controller
             'navigation' => $navigation,
             'category' => $category,
             'pageTitle' => $lessonData['title'] . ' - Jackadit.com',
+            'metaDescription' => $lessonData['description'] ?? substr(strip_tags($lessonData['content']), 0, 155),
         ]);
     }
 }
