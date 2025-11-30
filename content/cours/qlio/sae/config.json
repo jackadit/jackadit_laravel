@@ -1,7 +1,7 @@
 {
-    "titre": "SAÉ",
+    "title": "SAÉ",
     "description": "Situation d'apprentissage et d'évaluation.",
-    "icone": "fa-graduation-cap",
-    "couleur": "#e74c3c",
-    "position": 15
+    "icon": "fa-graduation-cap",
+    "color": "#e74c3c",
+    "order": 15
 }

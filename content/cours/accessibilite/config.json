@@ -1,6 +1,7 @@
 {
-    "titre": "Accessibilité Web",
+    "title": "Accessibilité Web",
     "description": "Apprenez à rendre vos sites web accessibles à tous les utilisateurs, y compris les personnes en situation de handicap.",
-    "icone": "fa-universal-access",
-    "couleur": "#3498db"
+    "icon": "fa-universal-access",
+    "color": "#3498db",
+    "order": 3
 }

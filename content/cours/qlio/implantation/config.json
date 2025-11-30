@@ -1,7 +1,7 @@
 {
-    "titre": "Implantation",
+    "title": "Implantation",
     "description": "Comment implanter une multitude de machines de manière optimale.",
-    "icone": "fa-industry",
-    "couleur": "#e67e22",
-    "position": 3
+    "icon": "fa-industry",
+    "color": "#e67e22",
+    "order": 3
 }

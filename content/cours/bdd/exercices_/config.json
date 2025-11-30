@@ -1,6 +1,6 @@
 {
-    "titre": "Exercices",
+    "title": "Exercices",
     "description": "Apprenez à être plus efficace avec les outils bureautiques.",
-    "icone": "fa-folder",
-    "couleur": "#e74c3c"
+    "icon": "fa-folder",
+    "color": "#e74c3c"
 }

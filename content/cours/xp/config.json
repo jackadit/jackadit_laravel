@@ -1,6 +1,7 @@
 {
-    "titre": "Windows XP",
+    "title": "Windows XP",
     "description": "Ce cours est bien entendu désuet, mais pour les nostalgiques et pour le travail que cela a demandé, j'ai décidé de le garder en ligne ;-)",
-    "icone": "fa-brands fa-windows",
-    "couleur": "#f39c12"
+    "icon": "fa-brands fa-windows",
+    "color": "#f39c12",
+    "order": 5
 }

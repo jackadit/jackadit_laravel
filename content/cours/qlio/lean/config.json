@@ -1,7 +1,7 @@
 {
-    "titre": "Lean",
+    "title": "Lean",
     "description": "Les principes du lean à utiliser concrètement.",
-    "icone": "fa-chart-line",
-    "couleur": "#f39c12",
-    "position": 5
+    "icon": "fa-chart-line",
+    "color": "#f39c12",
+    "order": 5
 }

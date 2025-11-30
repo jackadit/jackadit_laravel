@@ -1,7 +1,7 @@
 {
-    "titre": "Ensemble de la formation QLIO",
+    "title": "Ensemble de la formation QLIO",
     "description": "Apprenez à être plus efficace avec les outils bureautiques.",
-    "icone": "fa-book",
-    "couleur": "#9b59b6",
-    "position": 0
+    "icon": "fa-book",
+    "color": "#9b59b6",
+    "order": 0
 }

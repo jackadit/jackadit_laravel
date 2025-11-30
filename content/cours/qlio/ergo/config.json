@@ -1,7 +1,7 @@
 {
-    "titre": "Ergonomie",
+    "title": "Ergonomie",
     "description": "Pour éviter les TMS, tenez compte de l'ergonomie aux postes de travail.",
-    "icone": "fa-user",
-    "couleur": "#3498db",
-    "position": 1
+    "icon": "fa-user",
+    "color": "#3498db",
+    "order": 1
 }

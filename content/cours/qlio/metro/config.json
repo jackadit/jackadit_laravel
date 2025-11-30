@@ -1,7 +1,7 @@
 {
-    "titre": "Métrologie",
+    "title": "Métrologie",
     "description": "La métrologie GPS.",
-    "icone": "fa-ruler",
-    "couleur": "#9b59b6",
-    "position": 4
+    "icon": "fa-ruler",
+    "color": "#9b59b6",
+    "order": 4
 }

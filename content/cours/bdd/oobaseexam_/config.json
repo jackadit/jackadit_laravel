@@ -1,6 +1,6 @@
 {
-    "titre": "OOBase : examen",
+    "title": "OOBase : examen",
     "description": "Testez vos connaissances sur OoBase.",
-    "icone": "/assets/img/bureautique/oobase/oobase.png",
-    "couleur": "#e74c3c"
+    "icon": "/assets/img/bureautique/oobase/oobase.png",
+    "color": "#e74c3c"
 }

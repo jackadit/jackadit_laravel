@@ -1,7 +1,7 @@
 {
-    "titre": "Gestion physique des stocks",
+    "title": "Gestion physique des stocks",
     "description": "Gérer les stocks physiquement.",
-    "icone": "fa-boxes",
-    "couleur": "#16a085",
-    "position": 13
+    "icon": "fa-boxes",
+    "color": "#16a085",
+    "order": 13
 }

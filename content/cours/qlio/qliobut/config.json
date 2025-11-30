@@ -1,7 +1,7 @@
 {
-    "titre": "BUT QLIO",
+    "title": "BUT QLIO",
     "description": "Contenu de la formation BUT QLIO.",
-    "icone": "fa-university",
-    "couleur": "#2c3e50",
-    "position": 0
+    "icon": "fa-university",
+    "color": "#2c3e50",
+    "order": 0
 }

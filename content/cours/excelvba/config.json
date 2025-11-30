@@ -1,6 +1,7 @@
 {
-    "titre": "Excel VBA",
+    "title": "Excel VBA",
     "description": "Les bases de la programmation Excel VBA.",
-    "icone": "fa-file-excel",
-    "couleur": "#2ecc71"
+    "icon": "fa-file-excel",
+    "color": "#2ecc71",
+    "order": 4
 }

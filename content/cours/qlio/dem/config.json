@@ -1,7 +1,7 @@
 {
-    "titre": "Gestion de la demande",
+    "title": "Gestion de la demande",
     "description": "Apprenez à faire des prévisions en logistique.",
-    "icone": "fa-chart-bar",
-    "couleur": "#2c3e50",
-    "position": 7
+    "icon": "fa-chart-bar",
+    "color": "#2c3e50",
+    "order": 7
 }

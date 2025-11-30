@@ -1,7 +1,7 @@
 {
-    "titre": "TPM",
+    "title": "TPM",
     "description": "Total productive maintenance.",
-    "icone": "fa-wrench",
-    "couleur": "#34495e",
-    "position": 14
+    "icon": "fa-wrench",
+    "color": "#34495e",
+    "order": 14
 }

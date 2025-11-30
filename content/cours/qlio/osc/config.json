@@ -1,7 +1,7 @@
 {
-    "titre": "Parcours OSC",
+    "title": "Parcours OSC",
     "description": "Parcours Organisation de la Supply Chain.",
-    "icone": "fa-truck",
-    "couleur": "#d35400",
-    "position": 10
+    "icon": "fa-truck",
+    "color": "#d35400",
+    "order": 10
 }

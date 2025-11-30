@@ -1,7 +1,7 @@
 {
-    "titre": "Écoconception",
+    "title": "Écoconception",
     "description": "La conception en tenant compte de l'environnement.",
-    "icone": "fa-leaf",
-    "couleur": "#27ae60",
-    "position": 12
+    "icon": "fa-leaf",
+    "color": "#27ae60",
+    "order": 12
 }

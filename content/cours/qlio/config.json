@@ -1,20 +1,7 @@
 {
-    "titre": "QLIO",
+    "title": "QLIO",
     "description": "QLIO - Qualité, Logistique Industrielle et Organisation",
-    "icone": "/assets/img/qlio/qlio.png",
-    "couleur": "#9b59b6",
-    "themes": {
-        "theme1": {
-            "titre": "Thème 1 - Introduction à la qualité",
-            "description": "Concepts de base de la qualité",
-            "icone": "fa-check-circle",
-            "couleur": "#3498db"
-        },
-        "theme2": {
-            "titre": "Thème 2 - Logistique industrielle",
-            "description": "Fondements de la logistique en milieu industriel",
-            "icone": "fa-check-circle",
-            "couleur": "#2ecc71"
-        }
-    }
+    "icon": "fa-check-circle",
+    "color": "#2ecc71",
+    "order": 1
 }

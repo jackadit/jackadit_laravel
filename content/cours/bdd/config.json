@@ -1,7 +1,7 @@
 {
-  "titre": "Bases de données",
+  "title": "Bases de données",
   "description": "Apprenez à construire une base de données.",
-  "icone": "fa-database",
-  "couleur": "#e74c3c",
-  "position": 2
+  "icon": "fa-database",
+  "color": "#e74c3c",
+  "order": 2
 }

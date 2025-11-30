@@ -16,6 +16,10 @@ class CoursService
         $this->basePath = base_path('content/cours');
     }
 
+    // ========================================
+    // CATÉGORIES
+    // ========================================
+
     /**
      * Récupère toutes les catégories de cours
      */
@@ -29,11 +33,25 @@ class CoursService
                     $slug = basename($dir);
                     $config = $this->getCategoryConfig($slug);
 
+                    // 🎨 GESTION DES ICÔNES
+                    $icon = $config['icon'] ?? '📚';
+
+                    // Si c'est une classe FontAwesome (commence par "fa-")
+                    if (is_string($icon) && str_starts_with($icon, 'fa-')) {
+                        $icon = '<i class="fas ' . $icon . '"></i>';
+                    }
+                    // Si c'est un chemin d'image (commence par "/")
+                    elseif (is_string($icon) && str_starts_with($icon, '/')) {
+                        $icon = '<img src="' . $icon . '" alt="' . ($config['title'] ?? '') . '" class="w-full h-full object-contain">';
+                    }
+                    // Sinon c'est un emoji, on garde tel quel
+
                     return [
                         'slug' => $slug,
                         'title' => $config['title'] ?? $this->getCategoryTitle($slug),
                         'description' => $config['description'] ?? '',
-                        'icon' => $config['icon'] ?? '📚',
+                        'icon' => $icon, // 🎨 ICÔNE FORMATÉE
+                        'color' => $config['color'] ?? '#3498db',
                         'lessonsCount' => $this->countLessons($slug),
                         'order' => $config['order'] ?? 999,
                     ];
@@ -42,6 +60,7 @@ class CoursService
                 ->values();
         });
     }
+
 
     /**
      * Récupère la configuration d'une catégorie (config.json)
@@ -76,6 +95,80 @@ class CoursService
     }
 
     /**
+     * Vérifie si une catégorie existe
+     */
+    public function categoryExists(string $category): bool
+    {
+        return File::isDirectory("{$this->basePath}/{$category}");
+    }
+
+    // ========================================
+    // HIÉRARCHIE (NOUVEAUX)
+    // ========================================
+
+    /**
+     * Compte le nombre de sous-dossiers contenant un config.json
+     *
+     * @param string $path Chemin absolu du dossier parent
+     * @return int Nombre de sous-dossiers
+     */
+    public function countSubDirectories(string $path): int
+    {
+        $directories = File::directories($path);
+
+        return collect($directories)
+            ->filter(fn($dir) => File::exists("{$dir}/config.json"))
+            ->count();
+    }
+
+    /**
+     * Récupère les sous-dossiers avec leur configuration
+     *
+     * @param string $path Chemin absolu du dossier parent
+     * @return Collection Collection de dossiers avec leur config
+     */
+    public function getSubDirectories(string $path): Collection
+    {
+        $directories = File::directories($path);
+
+        return collect($directories)
+            ->filter(fn($dir) => File::exists("{$dir}/config.json"))
+            ->map(function ($dir) {
+                $slug = basename($dir);
+                $configPath = "{$dir}/config.json";
+
+                $config = json_decode(File::get($configPath), true) ?? [];
+
+                return [
+                    'slug' => $slug,
+                    'title' => $config['title'] ?? Str::title($slug),
+                    'description' => $config['description'] ?? '',
+                    'icon' => $config['icon'] ?? '📁',
+                    'color' => $config['color'] ?? '#3498db',
+                    'order' => $config['order'] ?? 999,
+                    'path' => $dir,
+                ];
+            })
+            ->sortBy('order')
+            ->values();
+    }
+
+    /**
+     * Vérifie si un dossier contient des sous-dossiers avec config.json
+     *
+     * @param string $path Chemin absolu du dossier
+     * @return bool
+     */
+    public function hasSubDirectories(string $path): bool
+    {
+        return $this->countSubDirectories($path) > 0;
+    }
+
+    // ========================================
+    // LEÇONS
+    // ========================================
+
+    /**
      * Compte le nombre de leçons dans une catégorie
      */
     private function countLessons(string $category): int
@@ -91,7 +184,6 @@ class CoursService
     {
         $cacheKey = "lesson.{$category}." . ($lessonNumber ?? 'intro');
 
-        // Cache flexible Laravel 12 (grace period 5-10 min)
         return Cache::flexible(
             $cacheKey,
             [now()->addMinutes(5), now()->addMinutes(10)],
@@ -186,6 +278,21 @@ class CoursService
     }
 
     /**
+     * Vérifie si une leçon existe
+     */
+    public function lessonExists(string $category, int $lessonNumber): bool
+    {
+        $filename = "{$category}{$lessonNumber}.inc.php";
+        $path = "{$this->basePath}/{$category}/{$filename}";
+
+        return File::exists($path);
+    }
+
+    // ========================================
+    // NAVIGATION
+    // ========================================
+
+    /**
      * Navigation précédent/suivant
      */
     public function getNavigation(string $category, ?int $current = null): array
@@ -204,24 +311,5 @@ class CoursService
             'all' => $lessons,
             'current' => $current,
         ];
-    }
-
-    /**
-     * Vérifie si une catégorie existe
-     */
-    public function categoryExists(string $category): bool
-    {
-        return File::isDirectory("{$this->basePath}/{$category}");
-    }
-
-    /**
-     * Vérifie si une leçon existe
-     */
-    public function lessonExists(string $category, int $lessonNumber): bool
-    {
-        $filename = "{$category}{$lessonNumber}.inc.php";
-        $path = "{$this->basePath}/{$category}/{$filename}";
-
-        return File::exists($path);
     }
 }

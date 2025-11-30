@@ -786,3 +786,6 @@ footer .text-gray-400 {
     @apply shadow-lg hover:shadow-xl;
     @apply transform hover:-translate-y-1;
 }
+
+/* Import cours CSS */
+@import './cours.css';

@@ -1,6 +1,6 @@
 {
-    "titre": "Access : examen",
+    "title": "Access : examen",
     "description": "testez vos connaissances sur Access.",
-    "icone": "/assets/img/bureautique/access/access.png",
-    "couleur": "#e74c3c"
+    "icon": "/assets/img/bureautique/access/access.png",
+    "color": "#e74c3c"
 }

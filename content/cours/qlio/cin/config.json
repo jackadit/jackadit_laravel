@@ -1,7 +1,7 @@
 {
-    "titre": "Cinématique du point matériel",
+    "title": "Cinématique du point matériel",
     "description": "La cinématique du solide.",
-    "icone": "fa-cogs",
-    "couleur": "#c0392b",
-    "position": 8
+    "icon": "fa-cogs",
+    "color": "#c0392b",
+    "order": 8
 }
