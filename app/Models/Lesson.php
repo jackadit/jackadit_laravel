@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class Lesson extends Model
@@ -15,14 +17,14 @@ class Lesson extends Model
         'title',
         'slug',
         'description',
-        'content_type',      // ⭐ AJOUTÉ
-        'content',
-        'video_url',
-        'document_path',
-        'duration',
-        'order',
-        'is_free',
-        'is_published',
+        'content_type',      // text, video, pdf, quiz
+        'content',           // Contenu texte/HTML
+        'video_url',         // URL Vimeo/YouTube
+        'document_path',     // Chemin vers PDF
+        'duration',          // En minutes
+        'order',             // Position dans le cours
+        'is_free',           // Aperçu gratuit
+        'is_published',      // Publié ou brouillon
     ];
 
     protected $casts = [
@@ -32,18 +34,20 @@ class Lesson extends Model
         'order' => 'integer',
     ];
 
-    // ⭐ Amélioré : slug + order automatique
+    // ============================================
+    // AUTO-GÉNÉRATION (slug + order)
+    // ============================================
     protected static function boot()
     {
         parent::boot();
 
         static::creating(function ($lesson) {
-            // Génération du slug
+            // 1. Génération du slug
             if (empty($lesson->slug)) {
                 $lesson->slug = Str::slug($lesson->title);
             }
 
-            // Auto-incrémentation de l'ordre
+            // 2. Auto-incrémentation de l'ordre
             if ($lesson->order === 0 || $lesson->order === null) {
                 $maxOrder = static::where('course_id', $lesson->course_id)->max('order');
                 $lesson->order = $maxOrder ? $maxOrder + 1 : 1;
@@ -58,13 +62,29 @@ class Lesson extends Model
         });
     }
 
+    // ============================================
+    // RELATIONS
+    // ============================================
+
     /**
      * Relation : Une leçon appartient à un cours
      */
-    public function course()
+    public function course(): BelongsTo
     {
         return $this->belongsTo(Course::class);
     }
+
+    /**
+     * Relation : Une leçon peut avoir plusieurs quiz
+     */
+    public function quizzes(): HasMany
+    {
+        return $this->hasMany(Quiz::class);
+    }
+
+    // ============================================
+    // SCOPES
+    // ============================================
 
     /**
      * Scope : Leçons publiées
@@ -91,7 +111,7 @@ class Lesson extends Model
     }
 
     /**
-     * ⭐ NOUVEAU : Scope : Leçons d'un cours
+     * Scope : Leçons d'un cours spécifique
      */
     public function scopeOfCourse($query, $courseId)
     {
@@ -99,15 +119,19 @@ class Lesson extends Model
     }
 
     /**
-     * ⭐ NOUVEAU : Scope : Leçons par type
+     * Scope : Leçons par type de contenu
      */
     public function scopeOfType($query, $type)
     {
         return $query->where('content_type', $type);
     }
 
+    // ============================================
+    // ACCESSORS
+    // ============================================
+
     /**
-     * Accessor : Durée formatée
+     * Accessor : Durée formatée (ex: "1h 30min")
      */
     public function getFormattedDurationAttribute()
     {
@@ -126,33 +150,7 @@ class Lesson extends Model
     }
 
     /**
-     * ⭐ NOUVEAU : Accessor : Type de contenu auto-détecté
-     */
-    public function getContentTypeAttribute($value)
-    {
-        // Si content_type existe en BDD, on le retourne
-        if ($value) {
-            return $value;
-        }
-
-        // Sinon, détection automatique (rétro-compatibilité)
-        if (!empty($this->video_url)) {
-            return 'video';
-        }
-
-        if (!empty($this->document_path)) {
-            return 'pdf';
-        }
-
-        if (!empty($this->content)) {
-            return 'text';
-        }
-
-        return 'text';
-    }
-
-    /**
-     * ⭐ NOUVEAU : Accessor : Icône du type de contenu
+     * ✅ Accessor : Icône du type de contenu
      */
     public function getContentIconAttribute()
     {
@@ -166,16 +164,94 @@ class Lesson extends Model
     }
 
     /**
-     * ✅ UNE LEÇON PEUT AVOIR PLUSIEURS QUIZ (relation 1:N)
+     * ✅ Accessor : Label lisible du type
      */
-    public function quizzes()  // ✅ PLURIEL + hasMany
+    public function getContentTypeLabelAttribute()
     {
-        return $this->hasMany(Quiz::class);
+        return match($this->content_type) {
+            'video' => 'Vidéo',
+            'text' => 'Texte',
+            'pdf' => 'Document PDF',
+            'quiz' => 'Quiz',
+            default => 'Contenu',
+        };
     }
 
-    public function hasQuiz()
+    // ============================================
+    // HELPER METHODS
+    // ============================================
+
+    /**
+     * Vérifie si la leçon a au moins un quiz
+     */
+    public function hasQuiz(): bool
     {
-        return $this->quiz()->exists();
+        return $this->quizzes()->exists();
     }
 
+    /**
+     * Récupère le quiz principal de la leçon (le premier)
+     */
+    public function mainQuiz(): ?Quiz
+    {
+        return $this->quizzes()->first();
+    }
+
+    /**
+     * ✨ NOUVEAU : Navigation - Leçon précédente
+     */
+    public function previous(): ?Lesson
+    {
+        return static::where('course_id', $this->course_id)
+            ->where('order', '<', $this->order)
+            ->orderBy('order', 'desc')
+            ->first();
+    }
+
+    /**
+     * ✨ NOUVEAU : Navigation - Leçon suivante
+     */
+    public function next(): ?Lesson
+    {
+        return static::where('course_id', $this->course_id)
+            ->where('order', '>', $this->order)
+            ->orderBy('order', 'asc')
+            ->first();
+    }
+
+    /**
+     * ✨ NOUVEAU : Vérifie si c'est la première leçon du cours
+     */
+    public function isFirst(): bool
+    {
+        return $this->order === 1;
+    }
+
+    /**
+     * ✨ NOUVEAU : Vérifie si c'est la dernière leçon du cours
+     */
+    public function isLast(): bool
+    {
+        $maxOrder = static::where('course_id', $this->course_id)->max('order');
+        return $this->order === $maxOrder;
+    }
+
+    /**
+     * URL vers la page de la leçon
+     */
+    public function url(): string
+    {
+        return route('courses.lessons.show', [
+            'course' => $this->course_id,
+            'lesson' => $this->id
+        ]);
+    }
+
+    /**
+     * Vérifie si la leçon est accessible (publiée OU gratuite)
+     */
+    public function isAccessible(): bool
+    {
+        return $this->is_published || $this->is_free;
+    }
 }

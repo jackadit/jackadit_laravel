@@ -14,7 +14,7 @@ return new class extends Migration
             $table->text('question_text');
             $table->enum('type', ['multiple_choice', 'true_false', 'short_answer'])->default('multiple_choice');
             $table->json('options')->nullable(); // Pour QCM : ["Option A", "Option B", ...]
-            $table->json('correct_answers'); // Réponses correctes (peut être multiple)
+            $table->json('show_correct_answers'); // Réponses correctes (peut être multiple)
             $table->integer('points')->default(1); // Points attribués
             $table->text('explanation')->nullable(); // Explication de la réponse
             $table->integer('order')->default(0);

@@ -74,7 +74,7 @@
                     :stats="[
                     'lessons' => '25',
                     'duration' => '12h',
-                    'level' => 'Débutant'
+                    'difficulty_level' => 'Débutant'
                 ]"
                     :difficulty="2"
                     type="category"
@@ -96,7 +96,7 @@
                     :stats="[
                     'lessons' => '18',
                     'duration' => '8h',
-                    'level' => 'Intermédiaire'
+                    'difficulty_level' => 'Intermédiaire'
                 ]"
                     :difficulty="2"
                     type="category"
@@ -118,7 +118,7 @@
                     :stats="[
                     'lessons' => '15',
                     'duration' => '6h',
-                    'level' => 'Tous niveaux'
+                    'difficulty_level' => 'Tous niveaux'
                 ]"
                     :difficulty="1"
                     type="category"

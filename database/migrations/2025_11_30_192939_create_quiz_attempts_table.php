@@ -10,17 +10,30 @@ return new class extends Migration
     {
         Schema::create('quiz_attempts', function (Blueprint $table) {
             $table->id();
+
+            // Relations
             $table->foreignId('quiz_id')->constrained()->onDelete('cascade');
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->json('answers'); // Réponses de l'utilisateur
-            $table->integer('score')->nullable(); // Score obtenu (en %)
-            $table->integer('points_earned')->default(0); // Points gagnés
-            $table->integer('total_points'); // Total de points possible
-            $table->boolean('passed')->default(false); // A réussi ou non
+
+            // Données de la tentative
+            $table->integer('score')->default(0); // Score obtenu
+            $table->integer('total_points')->default(0); // Total de points possibles
+            $table->decimal('percentage', 5, 2)->default(0); // Pourcentage (ex: 75.50)
+
+            // Statut
+            $table->enum('status', ['in_progress', 'completed', 'abandoned'])->default('in_progress');
+            $table->boolean('passed')->default(false); // A réussi le quiz ?
+
+            // Temps
             $table->timestamp('started_at')->nullable();
             $table->timestamp('completed_at')->nullable();
-            $table->integer('time_spent')->nullable(); // Temps passé en secondes
+            $table->integer('time_spent')->nullable(); // En secondes
+
             $table->timestamps();
+
+            // Index pour performances
+            $table->index(['quiz_id', 'user_id']);
+            $table->index('status');
         });
     }
 

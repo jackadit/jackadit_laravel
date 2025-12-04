@@ -1,199 +1,240 @@
 @extends('layouts.app')
 
 @section('content')
-    <div class="container mx-auto px-4 py-8">
+    <div class="container mx-auto px-4 py-6">
 
-        <!-- En-tête -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900 mb-2">✏️ Modifier la leçon</h1>
-                    <p class="text-gray-600">
-                        Cours :
-                        <a href="{{ route('courses.show', $course) }}" class="text-blue-600 hover:underline font-semibold">
-                            {{ $course->title }}
-                        </a>
-                    </p>
-                </div>
-                <a href="{{ route('courses.lessons.show', [$course, $lesson]) }}"
-                   class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
-                    ← Annuler
-                </a>
-            </div>
+        <!-- En-tête avec retour -->
+        <div class="mb-6">
+            <a href="{{ route('lessons.index', $course) }}"
+               class="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium transition-colors">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Retour aux leçons
+            </a>
         </div>
 
-        <!-- Formulaire -->
-        <div class="bg-white rounded-lg shadow-md p-6">
+        <!-- Card principale -->
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
 
-            @if($errors->any())
-                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-                    <strong>⚠️ Erreurs :</strong>
-                    <ul class="list-disc list-inside mt-2">
-                        @foreach($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
-                    </ul>
-                </div>
-            @endif
-
-            <form action="{{ route('courses.lessons.update', [$course, $lesson]) }}" method="POST">
-                @csrf
-                @method('PUT')
-
-                <!-- Titre -->
-                <div class="mb-6">
-                    <label for="title" class="block text-gray-700 font-semibold mb-2">
-                        📌 Titre de la leçon *
-                    </label>
-                    <input type="text"
-                           id="title"
-                           name="title"
-                           value="{{ old('title', $lesson->title) }}"
-                           class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                           required>
-                </div>
-
-                <!-- Description -->
-                <div class="mb-6">
-                    <label for="description" class="block text-gray-700 font-semibold mb-2">
-                        📝 Description
-                    </label>
-                    <textarea id="description"
-                              name="description"
-                              rows="3"
-                              class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">{{ old('description', $lesson->description) }}</textarea>
-                </div>
-
-                <!-- Type et Ordre -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-
-                    <!-- Type -->
+            <!-- En-tête avec dégradé -->
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem;">
+                <div class="flex items-center space-x-3">
+                    <span style="font-size: 2.5rem;">✏️</span>
                     <div>
-                        <label for="type" class="block text-gray-700 font-semibold mb-2">
-                            🎬 Type *
+                        <h1 class="text-3xl font-bold text-white">
+                            Modifier la leçon
+                        </h1>
+                        <p class="text-purple-100 mt-1">
+                            Cours : <strong>{{ $course->title }}</strong>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulaire -->
+            <div class="p-8">
+                <form action="{{ route('lessons.update', [$course, $lesson]) }}"
+                      method="POST"
+                      class="space-y-6">
+                    @csrf
+                    @method('PUT')
+
+                    <!-- Titre -->
+                    <div>
+                        <label for="title" class="block text-sm font-semibold text-gray-700 mb-2">
+                            📌 Titre de la leçon *
                         </label>
-                        <select id="type"
-                                name="type"
-                                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                required>
-                            <option value="video" {{ old('type', $lesson->type) === 'video' ? 'selected' : '' }}>🎥 Vidéo</option>
-                            <option value="text" {{ old('type', $lesson->type) === 'text' ? 'selected' : '' }}>📄 Texte</option>
-                            <option value="quiz" {{ old('type', $lesson->type) === 'quiz' ? 'selected' : '' }}>❓ Quiz</option>
-                            <option value="document" {{ old('type', $lesson->type) === 'document' ? 'selected' : '' }}>📎 Document</option>
+                        <input type="text"
+                               name="title"
+                               id="title"
+                               value="{{ old('title', $lesson->title) }}"
+                               required
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                               placeholder="Ex: Introduction au HTML">
+                        @error('title')
+                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <!-- Description -->
+                    <div>
+                        <label for="description" class="block text-sm font-semibold text-gray-700 mb-2">
+                            📝 Description
+                        </label>
+                        <textarea name="description"
+                                  id="description"
+                                  rows="4"
+                                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                                  placeholder="Décrivez le contenu de la leçon...">{{ old('description', $lesson->description) }}</textarea>
+                        @error('description')
+                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <!-- Type de contenu -->
+                    <div>
+                        <label for="content_type" class="block text-sm font-semibold text-gray-700 mb-2">
+                            🎬 Type de contenu *
+                        </label>
+                        <select name="content_type"
+                                id="content_type"
+                                required
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all">
+                            <option value="">-- Choisir --</option>
+                            <option value="video" {{ old('content_type', $lesson->content_type) == 'video' ? 'selected' : '' }}>🎥 Vidéo</option>
+                            <option value="text" {{ old('content_type', $lesson->content_type) == 'text' ? 'selected' : '' }}>📄 Texte</option>
                         </select>
+                        @error('content_type')
+                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
                     </div>
 
-                    <!-- Ordre -->
-                    <div>
-                        <label for="order" class="block text-gray-700 font-semibold mb-2">
-                            🔢 Ordre *
+                    <!-- URL Vidéo (conditionnelle) -->
+                    <div id="video_url_field" style="display: {{ old('content_type', $lesson->content_type) == 'video' ? 'block' : 'none' }};">
+                        <label for="video_url" class="block text-sm font-semibold text-gray-700 mb-2">
+                            🔗 URL de la vidéo
                         </label>
-                        <input type="number"
-                               id="order"
-                               name="order"
-                               value="{{ old('order', $lesson->order) }}"
-                               min="1"
-                               class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               required>
+                        <input type="url"
+                               name="video_url"
+                               id="video_url"
+                               value="{{ old('video_url', $lesson->video_url) }}"
+                               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                               placeholder="https://youtube.com/watch?v=...">
+                        <p class="mt-2 text-xs text-gray-500">
+                            YouTube, Vimeo, ou lien direct
+                        </p>
+                        @error('video_url')
+                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
                     </div>
 
-                    <!-- Durée -->
-                    <div>
-                        <label for="duration" class="block text-gray-700 font-semibold mb-2">
-                            ⏱️ Durée (minutes)
+                    <!-- Contenu texte (conditionnel) -->
+                    <div id="content_field" style="display: {{ old('content_type', $lesson->content_type) == 'text' ? 'block' : 'none' }};">
+                        <label for="content" class="block text-sm font-semibold text-gray-700 mb-2">
+                            📝 Contenu de la leçon
                         </label>
-                        <input type="number"
-                               id="duration"
-                               name="duration"
-                               value="{{ old('duration', $lesson->duration) }}"
-                               min="0"
-                               class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <textarea name="content"
+                                  id="content"
+                                  rows="8"
+                                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all font-mono text-sm"
+                                  placeholder="Écrivez le contenu de votre leçon...">{{ old('content', $lesson->content) }}</textarea>
+                        @error('content')
+                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
                     </div>
 
-                </div>
+                    <!-- Grille : Durée + Ordre -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                <!-- URL Vidéo -->
-                <div class="mb-6">
-                    <label for="video_url" class="block text-gray-700 font-semibold mb-2">
-                        🎥 URL de la vidéo
-                    </label>
-                    <input type="url"
-                           id="video_url"
-                           name="video_url"
-                           value="{{ old('video_url', $lesson->video_url) }}"
-                           class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <p class="text-sm text-gray-500 mt-1">
-                        💡 Pour YouTube, utilisez l'URL complète
-                    </p>
-                </div>
+                        <!-- Durée -->
+                        <div>
+                            <label for="duration" class="block text-sm font-semibold text-gray-700 mb-2">
+                                ⏱️ Durée (minutes) *
+                            </label>
+                            <input type="number"
+                                   name="duration"
+                                   id="duration"
+                                   value="{{ old('duration', $lesson->duration) }}"
+                                   required
+                                   min="1"
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                                   placeholder="Ex: 15">
+                            @error('duration')
+                            <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
 
-                <!-- Contenu -->
-                <div class="mb-6">
-                    <label for="content" class="block text-gray-700 font-semibold mb-2">
-                        📄 Contenu de la leçon
-                    </label>
-                    <textarea id="content"
-                              name="content"
-                              rows="10"
-                              class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm">{{ old('content', $lesson->content) }}</textarea>
-                </div>
+                        <!-- Ordre -->
+                        <div>
+                            <label for="order" class="block text-sm font-semibold text-gray-700 mb-2">
+                                🔢 Position dans le cours *
+                            </label>
+                            <input type="number"
+                                   name="order"
+                                   id="order"
+                                   value="{{ old('order', $lesson->order) }}"
+                                   required
+                                   min="1"
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                                   placeholder="Ex: 1">
+                            <p class="mt-2 text-xs text-gray-500">
+                                Total de leçons : {{ $course->lessons()->count() }}
+                            </p>
+                            @error('order')
+                            <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
 
-                <!-- Ressources -->
-                <div class="mb-6">
-                    <label for="resources" class="block text-gray-700 font-semibold mb-2">
-                        📎 Ressources additionnelles
-                    </label>
-                    <textarea id="resources"
-                              name="resources"
-                              rows="3"
-                              class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">{{ old('resources', $lesson->resources) }}</textarea>
-                </div>
+                    </div>
 
-                <!-- Accès gratuit -->
-                <div class="mb-6">
-                    <label class="flex items-center">
-                        <input type="checkbox"
-                               name="is_free"
-                               value="1"
-                               {{ old('is_free', $lesson->is_free) ? 'checked' : '' }}
-                               class="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500">
-                        <span class="ml-3 text-gray-700 font-semibold">
-                        🆓 Leçon accessible gratuitement
-                    </span>
-                    </label>
-                </div>
+                    <!-- Options : Gratuit + Publié -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                <!-- Boutons -->
-                <div class="flex justify-between items-center">
+                        <!-- Leçon gratuite -->
+                        <div class="flex items-center space-x-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+                            <input type="checkbox"
+                                   name="is_free"
+                                   id="is_free"
+                                   value="1"
+                                   {{ old('is_free', $lesson->is_free) ? 'checked' : '' }}
+                                   class="w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500">
+                            <label for="is_free" class="text-sm font-medium text-gray-700 cursor-pointer">
+                                🎁 Accessible gratuitement
+                            </label>
+                        </div>
 
-                    <!-- Bouton Supprimer -->
-                    <form action="{{ route('courses.lessons.destroy', [$course, $lesson]) }}"
-                          method="POST"
-                          onsubmit="return confirm('⚠️ Êtes-vous sûr de vouloir supprimer cette leçon ?')">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit"
-                                class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg">
-                            🗑️ Supprimer
-                        </button>
-                    </form>
+                        <!-- Publié -->
+                        <div class="flex items-center space-x-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <input type="checkbox"
+                                   name="is_published"
+                                   id="is_published"
+                                   value="1"
+                                   {{ old('is_published', $lesson->is_published) ? 'checked' : '' }}
+                                   class="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                            <label for="is_published" class="text-sm font-medium text-gray-700 cursor-pointer">
+                                ✅ Publier la leçon
+                            </label>
+                        </div>
 
-                    <!-- Boutons Annuler / Enregistrer -->
-                    <div class="flex space-x-3">
-                        <a href="{{ route('courses.lessons.show', [$course, $lesson]) }}"
-                           class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg">
-                            Annuler
+                    </div>
+
+                    <!-- Boutons d'action -->
+                    <div class="flex items-center justify-between pt-6 border-t border-gray-200">
+                        <a href="{{ route('lessons.index', $course) }}"
+                           class="px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors">
+                            ❌ Annuler
                         </a>
+
                         <button type="submit"
-                                class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg">
+                                class="px-8 py-3 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all"
+                                style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                             💾 Enregistrer
                         </button>
                     </div>
+                </form>
+            </div>
 
-                </div>
-
-            </form>
         </div>
 
     </div>
+
+    <!-- Script pour afficher/masquer les champs selon le type -->
+    <script>
+        document.getElementById('content_type').addEventListener('change', function() {
+            const videoField = document.getElementById('video_url_field');
+            const contentField = document.getElementById('content_field');
+
+            if (this.value === 'video') {
+                videoField.style.display = 'block';
+                contentField.style.display = 'none';
+            } else if (this.value === 'text') {
+                videoField.style.display = 'none';
+                contentField.style.display = 'block';
+            } else {
+                videoField.style.display = 'none';
+                contentField.style.display = 'none';
+            }
+        });
+    </script>
 @endsection

@@ -1,8 +1,8 @@
 <?php
 
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\CourseController;
 use App\Http\Controllers\LessonController;
-use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuizController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\QuizAttemptController;
@@ -14,91 +14,159 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-// Page d'accueil
 Route::get('/', function () {
     return view('welcome');
-})->name('home');
+});
+
+Route::get('/dashboard', function () {
+    return view('dashboard');
+})->middleware(['auth', 'verified'])->name('dashboard');
 
 /*
 |--------------------------------------------------------------------------
-| Routes Authentifiées
+| Routes Profil Utilisateur
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(['auth', 'verified'])->group(function () {
-
-    // Dashboard
-    Route::get('/dashboard', function () {
-        return view('dashboard');
-    })->name('dashboard');
-
-    // Profil utilisateur
-    Route::prefix('profile')->name('profile.')->group(function () {
-        Route::get('/', [ProfileController::class, 'edit'])->name('edit');
-        Route::patch('/', [ProfileController::class, 'update'])->name('update');
-        Route::delete('/', [ProfileController::class, 'destroy'])->name('destroy');
-    });
-
-    // Gestion des cours
-    Route::resource('courses', CourseController::class);
-
-    // ============================================
-    // 📖 GESTION DES LEÇONS (imbriquées dans les cours)
-    // ============================================
-    Route::prefix('courses/{course}')->name('courses.lessons.')->group(function () {
-
-        // CRUD classique
-        Route::get('/lessons', [LessonController::class, 'index'])->name('index');
-        Route::get('/lessons/create', [LessonController::class, 'create'])->name('create');
-        Route::post('/lessons', [LessonController::class, 'store'])->name('store');
-        Route::get('/lessons/{lesson}', [LessonController::class, 'show'])->name('show');
-        Route::get('/lessons/{lesson}/edit', [LessonController::class, 'edit'])->name('edit');
-        Route::put('/lessons/{lesson}', [LessonController::class, 'update'])->name('update');
-        Route::delete('/lessons/{lesson}', [LessonController::class, 'destroy'])->name('destroy');
-
-        // ⭐ Actions supplémentaires
-        Route::post('/lessons/reorder', [LessonController::class, 'reorder'])->name('reorder');
-        Route::post('/lessons/{lesson}/duplicate', [LessonController::class, 'duplicate'])->name('duplicate');
-    });
-
-    // Routes pour les QUIZ (formateur)
-    Route::resource('courses.lessons.quizzes', QuizController::class)
-        ->names([
-            'index' => 'courses.lessons.quizzes.index',
-            'create' => 'courses.lessons.quizzes.create',
-            'store' => 'courses.lessons.quizzes.store',
-            'show' => 'courses.lessons.quizzes.show',
-            'edit' => 'courses.lessons.quizzes.edit',
-            'update' => 'courses.lessons.quizzes.update',
-            'destroy' => 'courses.lessons.quizzes.destroy',
-        ]);
-
-    // Routes pour les QUESTIONS (formateur)
-    Route::resource('courses.lessons.quizzes.questions', QuestionController::class)
-        ->names([
-            'index' => 'courses.lessons.quizzes.questions.index',
-            'create' => 'courses.lessons.quizzes.questions.create',
-            'store' => 'courses.lessons.quizzes.questions.store',
-            'show' => 'courses.lessons.quizzes.questions.show',
-            'edit' => 'courses.lessons.quizzes.questions.edit',
-            'update' => 'courses.lessons.quizzes.questions.update',
-            'destroy' => 'courses.lessons.quizzes.questions.destroy',
-        ]);
-
-    // Routes pour passer les QUIZ (étudiant)
-    Route::prefix('courses/{course}/lessons/{lesson}/quizzes/{quiz}')->group(function () {
-        Route::post('/start', [QuizAttemptController::class, 'start'])->name('quiz-attempts.start');
-        Route::get('/attempts/{attempt}', [QuizAttemptController::class, 'take'])->name('quiz-attempts.take');
-        Route::post('/attempts/{attempt}/submit', [QuizAttemptController::class, 'submit'])->name('quiz-attempts.submit');
-        Route::get('/attempts/{attempt}/result', [QuizAttemptController::class, 'result'])->name('quiz-attempts.result');
-        Route::get('/history', [QuizAttemptController::class, 'history'])->name('quiz-attempts.history');
-    });
-
+Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
 /*
 |--------------------------------------------------------------------------
-| Routes d'authentification (Breeze)
+| Routes COURS (Accessibles à tous les utilisateurs connectés)
 |--------------------------------------------------------------------------
 */
+
+Route::middleware('auth')->group(function () {
+    // Liste et détails des cours
+    Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
+    Route::get('/courses/{course}', [CourseController::class, 'show'])->name('courses.show');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Routes FORMATEURS (instructor) - Gestion des cours
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth', 'role:instructor'])->prefix('instructor')->name('instructor.')->group(function () {
+
+    // === GESTION DES COURS ===
+    Route::resource('courses', CourseController::class)->except(['index', 'show']);
+
+    // Actions spécifiques cours
+    Route::post('courses/{course}/duplicate', [CourseController::class, 'duplicate'])
+        ->name('courses.duplicate');
+    Route::post('courses/{course}/publish', [CourseController::class, 'publish'])
+        ->name('courses.publish');
+    Route::post('courses/{course}/archive', [CourseController::class, 'archive'])
+        ->name('courses.archive');
+
+    // === GESTION DES LEÇONS ===
+    Route::prefix('courses/{course}/lessons')->name('lessons.')->group(function () {
+        Route::get('/', [LessonController::class, 'index'])->name('index');
+        Route::get('/create', [LessonController::class, 'create'])->name('create');
+        Route::post('/', [LessonController::class, 'store'])->name('store');
+        Route::get('/{lesson}', [LessonController::class, 'show'])->name('show');
+        Route::get('/{lesson}/edit', [LessonController::class, 'edit'])->name('edit');
+        Route::put('/{lesson}', [LessonController::class, 'update'])->name('update');
+        Route::delete('/{lesson}', [LessonController::class, 'destroy'])->name('destroy');
+
+        // Actions spécifiques leçons
+        Route::post('/{lesson}/duplicate', [LessonController::class, 'duplicate'])->name('duplicate');
+        Route::post('/{lesson}/toggle-status', [LessonController::class, 'toggleStatus'])->name('toggle-status');
+        Route::post('/reorder', [LessonController::class, 'reorder'])->name('reorder');
+    });
+
+    // === GESTION DES QUIZ ===
+    Route::prefix('courses/{course}/lessons/{lesson}/quizzes')->name('quizzes.')->group(function () {
+        Route::get('/', [QuizController::class, 'index'])->name('index');
+        Route::get('/create', [QuizController::class, 'create'])->name('create');
+        Route::post('/', [QuizController::class, 'store'])->name('store');
+        Route::get('/{quiz}', [QuizController::class, 'show'])->name('show');
+        Route::get('/{quiz}/edit', [QuizController::class, 'edit'])->name('edit');
+        Route::put('/{quiz}', [QuizController::class, 'update'])->name('update');
+        Route::delete('/{quiz}', [QuizController::class, 'destroy'])->name('destroy');
+
+        // Actions spécifiques quiz
+        Route::post('/{quiz}/duplicate', [QuizController::class, 'duplicate'])->name('duplicate');
+        Route::post('/{quiz}/toggle-status', [QuizController::class, 'toggleStatus'])->name('toggle-status');
+    });
+
+    // === GESTION DES QUESTIONS ===
+    Route::prefix('courses/{course}/lessons/{lesson}/quizzes/{quiz}/questions')->name('questions.')->group(function () {
+        Route::get('/create', [QuestionController::class, 'create'])->name('create');
+        Route::post('/', [QuestionController::class, 'store'])->name('store');
+        Route::get('/{question}/edit', [QuestionController::class, 'edit'])->name('edit');
+        Route::put('/{question}', [QuestionController::class, 'update'])->name('update');
+        Route::delete('/{question}', [QuestionController::class, 'destroy'])->name('destroy');
+
+        // Actions spécifiques questions
+        Route::post('/{question}/duplicate', [QuestionController::class, 'duplicate'])->name('duplicate');
+        Route::post('/reorder', [QuestionController::class, 'reorder'])->name('reorder');
+    });
+
+    // === SUIVI DES TENTATIVES (Instructeur) ===
+    Route::get('courses/{course}/lessons/{lesson}/quizzes/{quiz}/attempts',
+        [QuizAttemptController::class, 'index']
+    )->name('quiz-attempts.index');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Routes ÉTUDIANTS - Passage des quiz
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth', 'course.access'])->group(function () {
+
+    // === PASSAGE DES QUIZ ===
+    Route::prefix('courses/{course}/lessons/{lesson}/quizzes/{quiz}')->name('quiz-attempts.')->group(function () {
+
+        // Démarrer une tentative
+        Route::post('/start', [QuizAttemptController::class, 'start'])->name('start');
+
+        // Historique des tentatives
+        Route::get('/history', [QuizAttemptController::class, 'history'])->name('history');
+
+        // Gestion d'une tentative spécifique
+        Route::prefix('/attempts/{attempt}')->group(function () {
+            Route::get('/', [QuizAttemptController::class, 'take'])->name('take');
+            Route::post('/save-draft', [QuizAttemptController::class, 'saveDraft'])->name('save-draft');
+            Route::post('/submit', [QuizAttemptController::class, 'submit'])->name('submit');
+            Route::get('/result', [QuizAttemptController::class, 'result'])->name('result');
+            Route::get('/review', [QuizAttemptController::class, 'review'])->name('review');
+            Route::get('/certificate', [QuizAttemptController::class, 'certificate'])->name('certificate');
+        });
+    });
+});
+
+/*
+|--------------------------------------------------------------------------
+| Routes ADMINISTRATEUR
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
+    // Dashboard admin
+    Route::get('/dashboard', function () {
+        return view('admin.dashboard');
+    })->name('dashboard');
+
+    // Gestion des utilisateurs (à créer)
+    // Route::resource('users', UserController::class);
+
+    // Statistiques globales (à créer)
+    // Route::get('/stats', [AdminController::class, 'stats'])->name('stats');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Routes Auth (Breeze)
+|--------------------------------------------------------------------------
+*/
+
 require __DIR__.'/auth.php';

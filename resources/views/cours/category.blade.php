@@ -44,7 +44,7 @@
                             :stats="[
                             'lessons' => count($cours['lessons']) . ' leçons',
                             'duration' => $cours['duration'],
-                            'level' => ucfirst($cours['difficulty'])
+                            'difficulty_level' => ucfirst($cours['difficulty'])
                         ]"
                             :difficulty="$cours['difficulty'] === 'débutant' ? 1 : ($cours['difficulty'] === 'intermédiaire' ? 2 : 3)"
                             type="lesson"

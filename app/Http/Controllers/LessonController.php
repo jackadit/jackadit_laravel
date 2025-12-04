@@ -9,8 +9,15 @@ use Illuminate\Support\Facades\Storage;
 
 class LessonController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware('auth');
+        $this->middleware('course.ownership')->except(['index', 'show']);
+        $this->middleware('course.access')->only(['show']);
+    }
+
     /**
-     * Afficher toutes les leçons d'un cours
+     * Liste des leçons
      */
     public function index(Course $course)
     {
@@ -20,7 +27,7 @@ class LessonController extends Controller
     }
 
     /**
-     * Formulaire de création
+     * Formulaire création
      */
     public function create(Course $course)
     {
@@ -30,45 +37,77 @@ class LessonController extends Controller
     }
 
     /**
-     * Enregistrer une nouvelle leçon
+     * Enregistrer
      */
     public function store(Request $request, Course $course)
     {
         $validated = $this->validateLesson($request);
 
-        // Gérer l'upload du document
+        // Upload vidéo
+        if ($request->hasFile('video')) {
+            $validated['video_url'] = $request->file('video')
+                ->store('lessons/videos', 'public');
+        }
+
+        // Upload document
         if ($request->hasFile('document')) {
             $validated['document_path'] = $request->file('document')
                 ->store('lessons/documents', 'public');
         }
 
-        // ⭐ FIX : Gestion correcte des booléens
         $validated['course_id'] = $course->id;
         $validated['is_free'] = $request->boolean('is_free');
         $validated['is_published'] = $request->boolean('is_published');
-
-        // ⭐ NOUVEAU : Détecter automatiquement le content_type
         $validated['content_type'] = $this->detectContentType($validated);
 
         Lesson::create($validated);
 
-        return redirect()->route('courses.lessons.index', $course)
+        return redirect()->route('lessons.index', $course)
             ->with('success', '✅ Leçon créée avec succès !');
     }
 
     /**
-     * Afficher une leçon
+     * Afficher (avec navigation)
      */
     public function show(Course $course, Lesson $lesson)
     {
-
         $this->authorizeLesson($course, $lesson);
 
-        return view('lessons.show', compact('course', 'lesson'));
+        $lesson->load('quizzes');
+
+        // 🆕 NAVIGATION PREV/NEXT
+        $previousLesson = $course->lessons()
+            ->where('order', '<', $lesson->order)
+            ->ordered()
+            ->latest('order')
+            ->first();
+
+        $nextLesson = $course->lessons()
+            ->where('order', '>', $lesson->order)
+            ->ordered()
+            ->first();
+
+        // 🆕 PROGRESSION
+        $isCompleted = false;
+        if (auth()->check()) {
+            $isCompleted = auth()->user()
+                ->lessonProgress()
+                ->where('lesson_id', $lesson->id)
+                ->where('is_completed', true)
+                ->exists();
+        }
+
+        return view('lessons.show', compact(
+            'course',
+            'lesson',
+            'previousLesson',
+            'nextLesson',
+            'isCompleted'
+        ));
     }
 
     /**
-     * Formulaire d'édition
+     * Formulaire édition
      */
     public function edit(Course $course, Lesson $lesson)
     {
@@ -78,7 +117,7 @@ class LessonController extends Controller
     }
 
     /**
-     * Mettre à jour une leçon
+     * Mettre à jour
      */
     public function update(Request $request, Course $course, Lesson $lesson)
     {
@@ -86,14 +125,30 @@ class LessonController extends Controller
 
         $validated = $this->validateLesson($request);
 
-        // ⭐ NOUVEAU : Gérer la suppression explicite du document
+        // 🎯 SUPPRESSION VIDÉO
+        if ($request->boolean('remove_video')) {
+            if ($lesson->video_url) {
+                Storage::disk('public')->delete($lesson->video_url);
+            }
+            $validated['video_url'] = null;
+        }
+        // Upload nouvelle vidéo
+        elseif ($request->hasFile('video')) {
+            if ($lesson->video_url) {
+                Storage::disk('public')->delete($lesson->video_url);
+            }
+            $validated['video_url'] = $request->file('video')
+                ->store('lessons/videos', 'public');
+        }
+
+        // 🎯 SUPPRESSION DOCUMENT
         if ($request->boolean('remove_document')) {
             if ($lesson->document_path) {
                 Storage::disk('public')->delete($lesson->document_path);
             }
             $validated['document_path'] = null;
         }
-        // Gérer l'upload du nouveau document
+        // Upload nouveau document
         elseif ($request->hasFile('document')) {
             if ($lesson->document_path) {
                 Storage::disk('public')->delete($lesson->document_path);
@@ -102,39 +157,44 @@ class LessonController extends Controller
                 ->store('lessons/documents', 'public');
         }
 
-        // ⭐ FIX : Gestion correcte des booléens
         $validated['is_free'] = $request->boolean('is_free');
         $validated['is_published'] = $request->boolean('is_published');
-
-        // ⭐ NOUVEAU : Mettre à jour le content_type
         $validated['content_type'] = $this->detectContentType($validated, $lesson);
 
         $lesson->update($validated);
 
-        return redirect()->route('courses.lessons.index', $course)
+        return redirect()->route('lessons.show', [$course, $lesson])
             ->with('success', '✅ Leçon mise à jour avec succès !');
     }
 
     /**
-     * Supprimer une leçon
+     * Supprimer
      */
     public function destroy(Course $course, Lesson $lesson)
     {
         $this->authorizeLesson($course, $lesson);
 
-        // Supprimer le document associé
+        // Supprimer fichiers
+        if ($lesson->video_url) {
+            Storage::disk('public')->delete($lesson->video_url);
+        }
         if ($lesson->document_path) {
             Storage::disk('public')->delete($lesson->document_path);
         }
 
+        // Réorganiser
+        $course->lessons()
+            ->where('order', '>', $lesson->order)
+            ->decrement('order');
+
         $lesson->delete();
 
-        return redirect()->route('courses.lessons.index', $course)
+        return redirect()->route('lessons.index', $course)
             ->with('success', '✅ Leçon supprimée avec succès !');
     }
 
     /**
-     * ⭐ NOUVEAU : Réorganiser les leçons (drag & drop)
+     * Réorganiser
      */
     public function reorder(Request $request, Course $course)
     {
@@ -152,12 +212,12 @@ class LessonController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => '✅ Ordre des leçons mis à jour !'
+            'message' => '✅ Ordre mis à jour !'
         ]);
     }
 
     /**
-     * ⭐ NOUVEAU : Dupliquer une leçon
+     * Dupliquer
      */
     public function duplicate(Course $course, Lesson $lesson)
     {
@@ -165,22 +225,19 @@ class LessonController extends Controller
 
         $newLesson = $lesson->replicate();
         $newLesson->title = $lesson->title . ' (Copie)';
-        $newLesson->slug = null; // Le modèle va le régénérer
+        $newLesson->slug = null;
         $newLesson->order = $course->lessons()->max('order') + 1;
-        $newLesson->is_published = false; // Brouillon par défaut
+        $newLesson->is_published = false;
         $newLesson->save();
 
-        return redirect()->route('courses.lessons.edit', [$course, $newLesson])
-            ->with('success', '✅ Leçon dupliquée avec succès !');
+        return redirect()->route('lessons.edit', [$course, $newLesson])
+            ->with('success', '✅ Leçon dupliquée !');
     }
 
     // ========================================
     // MÉTHODES PRIVÉES
     // ========================================
 
-    /**
-     * Validation centralisée
-     */
     private function validateLesson(Request $request)
     {
         return $request->validate([
@@ -189,15 +246,15 @@ class LessonController extends Controller
             'content_type' => 'nullable|in:text,video,pdf,quiz',
             'content' => 'nullable|string',
             'video_url' => 'nullable|url',
+            'video' => 'nullable|file|mimetypes:video/mp4,video/mpeg,video/quicktime|max:102400',
             'document' => 'nullable|file|mimes:pdf,doc,docx,ppt,pptx|max:10240',
             'duration' => 'nullable|integer|min:1',
             'order' => 'required|integer|min:0',
+            'is_free' => 'boolean',
+            'is_published' => 'boolean',
         ]);
     }
 
-    /**
-     * Vérifier que la leçon appartient au cours
-     */
     private function authorizeLesson(Course $course, Lesson $lesson): void
     {
         if ($lesson->course_id !== $course->id) {
@@ -205,25 +262,11 @@ class LessonController extends Controller
         }
     }
 
-    /**
-     * Détecter automatiquement le type de contenu
-     */
     private function detectContentType(array $data, ?Lesson $lesson = null)
     {
-        // Si explicitement défini, on le garde
-        if (!empty($data['content_type'])) {
-            return $data['content_type'];
-        }
-
-        // Détection automatique
-        if (!empty($data['video_url'])) {
-            return 'video';
-        }
-
-        if (!empty($data['document']) || ($lesson && $lesson->document_path)) {
-            return 'pdf';
-        }
-
+        if (!empty($data['content_type'])) return $data['content_type'];
+        if (!empty($data['video_url']) || !empty($data['video'])) return 'video';
+        if (!empty($data['document']) || ($lesson && $lesson->document_path)) return 'pdf';
         return 'text';
     }
 }

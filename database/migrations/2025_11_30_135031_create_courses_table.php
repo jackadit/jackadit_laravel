@@ -17,7 +17,7 @@ return new class extends Migration
             $table->enum('level', ['beginner', 'intermediate', 'advanced'])->default('beginner');
             $table->decimal('price', 8, 2)->default(0);
             $table->boolean('is_published')->default(false);
-            $table->foreignId('teacher_id')->nullable()->constrained('users')->onDelete('set null');
+            $table->foreignId('instructor_id')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamps();
         });
     }
