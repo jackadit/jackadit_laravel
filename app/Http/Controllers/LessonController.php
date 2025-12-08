@@ -6,18 +6,26 @@ use App\Models\Course;
 use App\Models\Lesson;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
-class LessonController extends Controller
+class LessonController extends Controller implements HasMiddleware
 {
-    public function __construct()
+    /**
+     * ✅ Définition des middlewares Laravel 11+
+     */
+    public static function middleware(): array
     {
-        $this->middleware('auth');
-        $this->middleware('course.ownership')->except(['index', 'show']);
-        $this->middleware('course.access')->only(['show']);
+        return [
+            'auth', // Toutes les méthodes nécessitent auth
+            new Middleware('course.ownership', except: ['index', 'show', 'studentShow']),
+            new Middleware('course.access', only: ['studentShow', 'markComplete']),
+            new Middleware('lesson.sequential', only: ['studentShow']), // ✅ NOUVEAU
+        ];
     }
 
     /**
-     * Liste des leçons
+     * Liste des leçons (instructeur)
      */
     public function index(Course $course)
     {
@@ -62,12 +70,12 @@ class LessonController extends Controller
 
         Lesson::create($validated);
 
-        return redirect()->route('lessons.index', $course)
+        return redirect()->route('instructor.lessons.index', $course)
             ->with('success', '✅ Leçon créée avec succès !');
     }
 
     /**
-     * Afficher (avec navigation)
+     * Afficher (instructeur)
      */
     public function show(Course $course, Lesson $lesson)
     {
@@ -75,7 +83,7 @@ class LessonController extends Controller
 
         $lesson->load('quizzes');
 
-        // 🆕 NAVIGATION PREV/NEXT
+        // Navigation
         $previousLesson = $course->lessons()
             ->where('order', '<', $lesson->order)
             ->ordered()
@@ -87,23 +95,81 @@ class LessonController extends Controller
             ->ordered()
             ->first();
 
-        // 🆕 PROGRESSION
-        $isCompleted = false;
-        if (auth()->check()) {
-            $isCompleted = auth()->user()
-                ->lessonProgress()
-                ->where('lesson_id', $lesson->id)
-                ->where('is_completed', true)
-                ->exists();
-        }
-
         return view('lessons.show', compact(
+            'course',
+            'lesson',
+            'previousLesson',
+            'nextLesson'
+        ));
+    }
+
+    /**
+     * ✅ NOUVELLE : Vue étudiant d'une leçon
+     */
+    public function studentShow(Course $course, Lesson $lesson)
+    {
+        $this->authorizeLesson($course, $lesson);
+
+        $lesson->load('quizzes');
+
+        // Navigation
+        $previousLesson = $course->lessons()
+            ->where('order', '<', $lesson->order)
+            ->where('is_published', true)
+            ->ordered()
+            ->latest('order')
+            ->first();
+
+        $nextLesson = $course->lessons()
+            ->where('order', '>', $lesson->order)
+            ->where('is_published', true)
+            ->ordered()
+            ->first();
+
+        // Progression
+        $isCompleted = auth()->user()
+            ->lessonCompletions()
+            ->where('lesson_id', $lesson->id)
+            ->where('is_completed', true)
+            ->exists();
+
+        return view('lessons.student-show', compact(
             'course',
             'lesson',
             'previousLesson',
             'nextLesson',
             'isCompleted'
         ));
+    }
+
+    /**
+     * ✅ NOUVELLE : Marquer leçon comme complétée
+     */
+    public function markComplete(Course $course, Lesson $lesson)
+    {
+        $this->authorizeLesson($course, $lesson);
+
+        $user = auth()->user();
+
+        // Enregistrer progression
+        $user->lessonCompletions()->updateOrCreate(
+            [
+                'lesson_id' => $lesson->id,
+                'user_id' => $user->id,
+            ],
+            [
+                'is_completed' => true,
+                'completed_at' => now(),
+            ]
+        );
+
+        // Mettre à jour progression cours
+        $this->updateCourseProgress($user, $course);
+
+        return response()->json([
+            'success' => true,
+            'message' => '✅ Leçon marquée comme complétée !',
+        ]);
     }
 
     /**
@@ -125,15 +191,13 @@ class LessonController extends Controller
 
         $validated = $this->validateLesson($request);
 
-        // 🎯 SUPPRESSION VIDÉO
+        // Gestion vidéo
         if ($request->boolean('remove_video')) {
             if ($lesson->video_url) {
                 Storage::disk('public')->delete($lesson->video_url);
             }
             $validated['video_url'] = null;
-        }
-        // Upload nouvelle vidéo
-        elseif ($request->hasFile('video')) {
+        } elseif ($request->hasFile('video')) {
             if ($lesson->video_url) {
                 Storage::disk('public')->delete($lesson->video_url);
             }
@@ -141,15 +205,13 @@ class LessonController extends Controller
                 ->store('lessons/videos', 'public');
         }
 
-        // 🎯 SUPPRESSION DOCUMENT
+        // Gestion document
         if ($request->boolean('remove_document')) {
             if ($lesson->document_path) {
                 Storage::disk('public')->delete($lesson->document_path);
             }
             $validated['document_path'] = null;
-        }
-        // Upload nouveau document
-        elseif ($request->hasFile('document')) {
+        } elseif ($request->hasFile('document')) {
             if ($lesson->document_path) {
                 Storage::disk('public')->delete($lesson->document_path);
             }
@@ -163,7 +225,7 @@ class LessonController extends Controller
 
         $lesson->update($validated);
 
-        return redirect()->route('lessons.show', [$course, $lesson])
+        return redirect()->route('instructor.lessons.show', [$course, $lesson])
             ->with('success', '✅ Leçon mise à jour avec succès !');
     }
 
@@ -182,14 +244,14 @@ class LessonController extends Controller
             Storage::disk('public')->delete($lesson->document_path);
         }
 
-        // Réorganiser
+        // Réorganiser ordre
         $course->lessons()
             ->where('order', '>', $lesson->order)
             ->decrement('order');
 
         $lesson->delete();
 
-        return redirect()->route('lessons.index', $course)
+        return redirect()->route('instructor.lessons.index', $course)
             ->with('success', '✅ Leçon supprimée avec succès !');
     }
 
@@ -230,7 +292,7 @@ class LessonController extends Controller
         $newLesson->is_published = false;
         $newLesson->save();
 
-        return redirect()->route('lessons.edit', [$course, $newLesson])
+        return redirect()->route('instructor.lessons.edit', [$course, $newLesson])
             ->with('success', '✅ Leçon dupliquée !');
     }
 
@@ -262,11 +324,44 @@ class LessonController extends Controller
         }
     }
 
-    private function detectContentType(array $data, ?Lesson $lesson = null)
+    private function detectContentType(array $data, ?Lesson $lesson = null): string
     {
         if (!empty($data['content_type'])) return $data['content_type'];
         if (!empty($data['video_url']) || !empty($data['video'])) return 'video';
         if (!empty($data['document']) || ($lesson && $lesson->document_path)) return 'pdf';
         return 'text';
     }
+
+    /**
+     * ✅ Mettre à jour progression globale du cours
+     */
+    private function updateCourseProgress($user, Course $course): void
+    {
+        // ✅ Cache la progression 5 minutes
+        $cacheKey = "course_progress_{$user->id}_{$course->id}";
+
+        $progress = Cache::remember($cacheKey, 300, function () use ($user, $course) {
+            $totalLessons = $course->lessons()
+                ->where('is_published', true)
+                ->count();
+
+            $completedLessons = $user->lessonCompletions()
+                ->whereHas('lesson', function ($query) use ($course) {
+                    $query->where('course_id', $course->id)
+                        ->where('is_published', true);
+                })
+                ->where('is_completed', true)
+                ->count();
+
+            return $totalLessons > 0 ? ($completedLessons / $totalLessons) * 100 : 0;
+        });
+
+        $user->enrollments()
+            ->where('course_id', $course->id)
+            ->update([
+                'progress' => round($progress, 2),
+                'last_accessed_at' => now(),
+            ]);
+    }
+
 }

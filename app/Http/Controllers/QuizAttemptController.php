@@ -7,56 +7,87 @@ use App\Models\Lesson;
 use App\Models\Quiz;
 use App\Models\QuizAttempt;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
-class QuizAttemptController extends Controller
+class QuizAttemptController extends Controller implements HasMiddleware
 {
     /**
-     * Middlewares de sécurité
+     * ✅ Définition des middlewares Laravel 11+
      */
-    public function __construct()
+    public static function middleware(): array
     {
-        $this->middleware('auth');
-        $this->middleware('course.access');
+        return [
+            'auth',
+            new Middleware('course.ownership', only: ['instructorIndex', 'instructorShow']),
+            new Middleware('course.access', except: ['instructorIndex', 'instructorShow']),
+        ];
     }
 
     /**
-     * Liste des tentatives (instructeur)
+     * ✅ Liste tentatives (instructeur)
      */
-    public function index(Course $course, Lesson $lesson, Quiz $quiz)
+    public function instructorIndex(Course $course, Lesson $lesson, Quiz $quiz)
     {
-        $this->authorize('view', $course); // Policy instructeur
-
         $this->authorizeQuiz($lesson, $quiz);
 
         $attempts = $quiz->attempts()
             ->with('user:id,name,email')
-            ->withCount('answers')
-            ->orderBy('created_at', 'desc')
+            ->latest()
             ->paginate(20);
 
-        // Statistiques globales
         $stats = [
             'total_attempts' => $attempts->total(),
-            'avg_score' => $quiz->attempts()->avg('score'),
-            'pass_rate' => $quiz->attempts()->where('is_passed', true)->count() / max($attempts->total(), 1) * 100,
-            'avg_time' => $quiz->attempts()->avg('time_spent'),
+            'avg_score' => round($quiz->attempts()->avg('score'), 2),
+            'pass_rate' => $attempts->total() > 0
+                ? round(($quiz->attempts()->where('is_passed', true)->count() / $attempts->total()) * 100, 2)
+                : 0,
+            'avg_time' => round($quiz->attempts()->avg('time_spent') / 60, 2), // minutes
         ];
 
-        return view('quiz-attempts.index', compact('course', 'lesson', 'quiz', 'attempts', 'stats'));
+        return view('quiz-attempts.instructor-index', compact('course', 'lesson', 'quiz', 'attempts', 'stats'));
     }
 
     /**
-     * Démarrer un quiz (étudiant)
+     * ✅ Détail tentative (instructeur)
+     */
+    public function instructorShow(Course $course, Lesson $lesson, Quiz $quiz, QuizAttempt $attempt)
+    {
+        $this->authorizeQuiz($lesson, $quiz);
+
+        $attempt->load(['user', 'quiz.questions.answers']);
+
+        return view('quiz-attempts.instructor-show', compact('course', 'lesson', 'quiz', 'attempt'));
+    }
+
+    /**
+     * ✅ Mes tentatives (étudiant)
+     */
+    public function myAttempts(Course $course, Lesson $lesson, Quiz $quiz)
+    {
+        $this->authorizeQuiz($lesson, $quiz);
+
+        $attempts = auth()->user()
+            ->quizAttempts()
+            ->where('quiz_id', $quiz->id)
+            ->with('quiz')
+            ->latest()
+            ->paginate(10);
+
+        return view('quiz-attempts.my-attempts', compact('course', 'lesson', 'quiz', 'attempts'));
+    }
+
+    /**
+     * Démarrer une tentative
      */
     public function start(Course $course, Lesson $lesson, Quiz $quiz)
     {
         $this->authorizeQuiz($lesson, $quiz);
 
-        $user = Auth::user();
+        $user = auth()->user();
 
-        // ⭐ Vérifications multiples
+        // Vérifications
         if (!$quiz->is_active) {
             return back()->with('error', '❌ Ce quiz n\'est pas disponible.');
         }
@@ -65,7 +96,7 @@ class QuizAttemptController extends Controller
             return back()->with('error', '❌ Vous avez atteint le nombre maximum de tentatives (' . $quiz->max_attempts . ').');
         }
 
-        // ⭐ Vérifier si tentative en cours
+        // Tentative en cours ?
         $ongoingAttempt = $quiz->attempts()
             ->where('user_id', $user->id)
             ->whereNull('completed_at')
@@ -73,11 +104,11 @@ class QuizAttemptController extends Controller
 
         if ($ongoingAttempt) {
             return redirect()
-                ->route('quiz-attempts.take', [$course, $lesson, $quiz, $ongoingAttempt])
+                ->route('student.quizzes.attempts.take', [$course, $lesson, $quiz, $ongoingAttempt])
                 ->with('info', '⚠️ Vous avez une tentative en cours.');
         }
 
-        // ⭐ Créer nouvelle tentative
+        // Créer nouvelle tentative
         $attempt = QuizAttempt::create([
             'quiz_id' => $quiz->id,
             'user_id' => $user->id,
@@ -87,40 +118,39 @@ class QuizAttemptController extends Controller
         ]);
 
         return redirect()
-            ->route('quiz-attempts.take', [$course, $lesson, $quiz, $attempt])
+            ->route('student.quizzes.attempts.take', [$course, $lesson, $quiz, $attempt])
             ->with('success', '✅ Quiz démarré ! Bonne chance 🍀');
     }
 
     /**
-     * Afficher le quiz (étudiant)
+     * Passer le quiz
      */
     public function take(Course $course, Lesson $lesson, Quiz $quiz, QuizAttempt $attempt)
     {
         $this->authorizeQuiz($lesson, $quiz);
         $this->authorizeAttempt($attempt);
 
-        // ⭐ Rediriger si déjà complété
+        // Quiz déjà complété ?
         if ($attempt->completed_at) {
             return redirect()
-                ->route('quiz-attempts.result', [$course, $lesson, $quiz, $attempt])
+                ->route('student.quizzes.attempts.result', [$course, $lesson, $quiz, $attempt])
                 ->with('info', 'Quiz déjà complété.');
         }
 
-        // ⭐ Vérifier timeout (si time_limit défini)
+        // Temps écoulé ?
         if ($quiz->time_limit && $attempt->isExpired()) {
-            $attempt->autoSubmit(); // Méthode Model
+            $attempt->autoSubmit();
 
             return redirect()
-                ->route('quiz-attempts.result', [$course, $lesson, $quiz, $attempt])
+                ->route('student.quizzes.attempts.result', [$course, $lesson, $quiz, $attempt])
                 ->with('warning', '⏰ Temps écoulé ! Le quiz a été automatiquement soumis.');
         }
 
-        // ⭐ Charger questions avec réponses
+        // Charger questions
         $questions = $quiz->shuffle_questions
             ? $quiz->questions()->with('answers')->inRandomOrder()->get()
             : $quiz->questions()->with('answers')->orderBy('order')->get();
 
-        // ⭐ Temps restant (si limité)
         $timeRemaining = $quiz->time_limit ? $attempt->remainingTime() : null;
 
         return view('quiz-attempts.take', compact(
@@ -134,18 +164,16 @@ class QuizAttemptController extends Controller
     }
 
     /**
-     * ⭐ NOUVEAU : Sauvegarder brouillon (AJAX)
+     * Sauvegarder brouillon (AJAX)
      */
     public function saveDraft(Request $request, Course $course, Lesson $lesson, Quiz $quiz, QuizAttempt $attempt)
     {
         $this->authorizeAttempt($attempt);
 
-        // Vérifier si non complété
         if ($attempt->completed_at) {
             return response()->json(['error' => 'Quiz déjà complété'], 400);
         }
 
-        // Sauvegarder les réponses
         $answers = $request->input('answers', []);
         $attempt->update(['answers' => $answers]);
 
@@ -164,47 +192,39 @@ class QuizAttemptController extends Controller
         $this->authorizeQuiz($lesson, $quiz);
         $this->authorizeAttempt($attempt);
 
-        // ⭐ Validation : quiz non complété
         if ($attempt->completed_at) {
             return back()->with('error', '❌ Ce quiz a déjà été soumis.');
         }
 
         $validated = $request->validate([
             'answers' => 'required|array',
-            'answers.*' => 'nullable', // Permet réponses vides
+            'answers.*' => 'nullable',
         ]);
 
         DB::beginTransaction();
 
         try {
-            // 1️⃣ Enregistrer réponses
+            // Enregistrer réponses
             $attempt->update([
                 'answers' => $validated['answers'],
                 'completed_at' => now(),
             ]);
 
-            // 2️⃣ Calculer temps passé
+            // Calculer temps
             $timeSpent = now()->diffInSeconds($attempt->started_at);
             $attempt->update(['time_spent' => $timeSpent]);
 
-            // 3️⃣ Calculer score (méthode Model)
+            // Calculer score
             $attempt->calculateScore();
 
-            // 4️⃣ ⭐ NOUVEAU : Mettre à jour progression leçon
+            // Mettre à jour progression
             $this->updateLessonProgress($attempt);
-
-            // 5️⃣ ⭐ NOUVEAU : Débloquer leçon suivante si réussi
-            if ($attempt->is_passed) {
-                $this->unlockNextLesson($course, $lesson);
-            }
 
             DB::commit();
 
             return redirect()
-                ->route('quiz-attempts.result', [$course, $lesson, $quiz, $attempt])
-                ->with('success', $attempt->is_passed
-                    ? '🎉 Félicitations ! Vous avez réussi le quiz !'
-                    : '📝 Quiz complété. Consultez vos résultats.');
+                ->route('student.quizzes.attempts.result', [$course, $lesson, $quiz, $attempt])
+                ->with('success', '✅ Quiz soumis avec succès !');
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -216,114 +236,39 @@ class QuizAttemptController extends Controller
     }
 
     /**
-     * Afficher le résultat
+     * Afficher résultat
      */
     public function result(Course $course, Lesson $lesson, Quiz $quiz, QuizAttempt $attempt)
     {
         $this->authorizeQuiz($lesson, $quiz);
         $this->authorizeAttempt($attempt);
 
-        // ⭐ Rediriger si non complété
-        if (!$attempt->completed_at) {
-            return redirect()
-                ->route('quiz-attempts.take', [$course, $lesson, $quiz, $attempt])
-                ->with('warning', '⚠️ Vous devez d\'abord terminer le quiz.');
-        }
+        $attempt->load('quiz.questions.answers');
 
-        // ⭐ Charger questions avec réponses et explications
-        $questions = $quiz->questions()
-            ->with('answers')
-            ->orderBy('order')
-            ->get();
-
-        // ⭐ NOUVEAU : Statistiques comparatives
-        $userStats = [
-            'attempts_count' => $quiz->userAttempts(Auth::id())->count(),
-            'best_score' => $quiz->userAttempts(Auth::id())->max('score'),
-            'avg_score' => $quiz->userAttempts(Auth::id())->avg('score'),
-        ];
-
-        $globalStats = [
-            'avg_score' => $quiz->attempts()->avg('score'),
-            'pass_rate' => $quiz->attempts()->where('is_passed', true)->count() / max($quiz->attempts()->count(), 1) * 100,
-        ];
-
-        return view('quiz-attempts.result', compact(
-            'course',
-            'lesson',
-            'quiz',
-            'attempt',
-            'questions',
-            'userStats',
-            'globalStats'
-        ));
+        return view('quiz-attempts.result', compact('course', 'lesson', 'quiz', 'attempt'));
     }
 
     /**
-     * Historique des tentatives (étudiant)
-     */
-    public function history(Course $course, Lesson $lesson, Quiz $quiz)
-    {
-        $this->authorizeQuiz($lesson, $quiz);
-
-        $attempts = $quiz->userAttempts(Auth::id())
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
-
-        // ⭐ Statistiques utilisateur
-        $stats = [
-            'total_attempts' => $attempts->total(),
-            'best_score' => $quiz->userAttempts(Auth::id())->max('score'),
-            'avg_score' => $quiz->userAttempts(Auth::id())->avg('score'),
-            'passed_attempts' => $quiz->userAttempts(Auth::id())->where('is_passed', true)->count(),
-        ];
-
-        return view('quiz-attempts.history', compact('course', 'lesson', 'quiz', 'attempts', 'stats'));
-    }
-
-    /**
-     * ⭐ NOUVEAU : Télécharger certificat (si réussi)
-     */
-    public function certificate(Course $course, Lesson $lesson, Quiz $quiz, QuizAttempt $attempt)
-    {
-        $this->authorizeAttempt($attempt);
-
-        if (!$attempt->is_passed) {
-            return back()->with('error', '❌ Vous devez réussir le quiz pour obtenir le certificat.');
-        }
-
-        // Générer PDF (utilise dompdf ou autre)
-        $pdf = \PDF::loadView('certificates.quiz', compact('course', 'lesson', 'quiz', 'attempt'));
-
-        return $pdf->download("certificat-quiz-{$quiz->id}.pdf");
-    }
-
-    /**
-     * ⭐ NOUVEAU : Révision (revoir questions sans soumettre)
+     * Revoir les réponses
      */
     public function review(Course $course, Lesson $lesson, Quiz $quiz, QuizAttempt $attempt)
     {
+        $this->authorizeQuiz($lesson, $quiz);
         $this->authorizeAttempt($attempt);
 
-        if (!$attempt->completed_at) {
-            return back()->with('error', '❌ Vous devez d\'abord terminer le quiz.');
+        if (!$quiz->show_correct_answers) {
+            return back()->with('error', '❌ La révision n\'est pas autorisée pour ce quiz.');
         }
 
-        $questions = $quiz->questions()
-            ->with('answers')
-            ->orderBy('order')
-            ->get();
+        $attempt->load('quiz.questions.answers');
 
-        return view('quiz-attempts.review', compact('course', 'lesson', 'quiz', 'attempt', 'questions'));
+        return view('quiz-attempts.review', compact('course', 'lesson', 'quiz', 'attempt'));
     }
 
     // ========================================
     // MÉTHODES PRIVÉES
     // ========================================
 
-    /**
-     * Vérifier que le quiz appartient à la leçon
-     */
     private function authorizeQuiz(Lesson $lesson, Quiz $quiz): void
     {
         if ($quiz->lesson_id !== $lesson->id) {
@@ -331,48 +276,45 @@ class QuizAttemptController extends Controller
         }
     }
 
-    /**
-     * Vérifier que l'utilisateur est propriétaire de la tentative
-     */
     private function authorizeAttempt(QuizAttempt $attempt): void
     {
-        if ($attempt->user_id !== Auth::id()) {
-            abort(403, 'Vous n\'êtes pas autorisé à accéder à cette tentative.');
+        if ($attempt->user_id !== auth()->id() && !auth()->user()->isAdmin()) {
+            abort(403, 'Cette tentative ne vous appartient pas.');
         }
     }
 
     /**
-     * ⭐ Mettre à jour progression leçon
+     * Mettre à jour progression leçon
      */
     private function updateLessonProgress(QuizAttempt $attempt): void
     {
-        $lesson = $attempt->quiz->lesson;
-        $user = Auth::user();
+        if ($attempt->is_passed) {
+            $user = auth()->user();
+            $lesson = $attempt->quiz->lesson;
 
-        // Créer/mettre à jour progression
-        $user->lessonProgress()->updateOrCreate(
-            ['lesson_id' => $lesson->id],
-            [
-                'is_completed' => $attempt->is_passed,
-                'completed_at' => $attempt->is_passed ? now() : null,
-            ]
-        );
-    }
+            $user->lessonCompletions()->updateOrCreate(
+                [
+                    'lesson_id' => $lesson->id,
+                    'user_id' => $user->id,
+                ],
+                [
+                    'is_completed' => true,
+                    'completed_at' => now(),
+                ]
+            );
 
-    /**
-     * ⭐ Débloquer leçon suivante si quiz réussi
-     */
-    private function unlockNextLesson(Course $course, Lesson $lesson): void
-    {
-        $nextLesson = $course->lessons()
-            ->where('order', '>', $lesson->order)
-            ->orderBy('order')
-            ->first();
+            // Débloquer leçon suivante
+            $nextLesson = $lesson->course->lessons()
+                ->where('order', '>', $lesson->order)
+                ->ordered()
+                ->first();
 
-        if ($nextLesson) {
-            Auth::user()->lessonProgress()->firstOrCreate([
-                'lesson_id' => $nextLesson->id,
-            ]);
+            if ($nextLesson) {
+                $user->lessonCompletions()->firstOrCreate([
+                    'lesson_id' => $nextLesson->id,
+                    'user_id' => $user->id,
+                ]);
+            }
         }
     }
 }

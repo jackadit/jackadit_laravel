@@ -3,94 +3,145 @@
 namespace App\Http\Controllers;
 
 use App\Models\Course;
-use App\Models\Category; // ✅ NOUVEAU
+use App\Models\Category;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 
-class CourseController extends Controller
+class CourseController extends Controller implements HasMiddleware
 {
-    public function __construct()
+    public static function middleware(): array
     {
-        $this->middleware('auth')->except(['index', 'show']);
-        $this->middleware('instructor')->only(['create', 'store']);
-
-        // ✅ AMÉLIORATION : Policy au lieu de middleware custom
-        $this->authorizeResource(Course::class, 'course');
+        return [
+            new Middleware('auth', except: ['index', 'show']),
+            new Middleware('course.ownership', only: ['edit', 'update', 'destroy']),
+        ];
     }
 
     /**
-     * ✅ AMÉLIORATION : Filtres + Recherche + Pagination
+     * Liste publique des cours (accessible à tous)
      */
     public function index(Request $request)
     {
-        $query = Course::with(['instructor', 'category'])
-            ->where('is_published', true);
-
-        // Recherche
-        if ($search = $request->input('search')) {
-            $query->search($search);
-        }
+        $query = Course::where('is_published', true)
+            ->with(['instructor', 'category']);
 
         // Filtre par catégorie
-        if ($categoryId = $request->input('category')) {
-            $query->byCategory($categoryId);
+        if ($request->has('category')) {
+            $query->whereHas('category', function ($q) use ($request) {
+                $q->where('slug', $request->category);
+            });
         }
 
         // Filtre par niveau
-        if ($level = $request->input('level')) {
-            $query->byLevel($level);
+        if ($request->has('level') && $request->level != '') {
+            $query->where('level', $request->level);
+        }
+
+        // Recherche par titre ou description
+        if ($request->has('search') && $request->search != '') {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            });
         }
 
         // Tri
-        $sort = $request->input('sort', 'latest');
-        match ($sort) {
-            'popular' => $query->withCount('enrollments')->orderByDesc('enrollments_count'),
-            'price_asc' => $query->orderBy('price'),
-            'price_desc' => $query->orderByDesc('price'),
-            default => $query->latest(),
-        };
+        $sort = $request->get('sort', 'latest');
+        switch ($sort) {
+            case 'popular':
+                $query->withCount('enrollments')->orderBy('enrollments_count', 'desc');
+                break;
+            case 'price_low':
+                $query->orderBy('price', 'asc');
+                break;
+            case 'price_high':
+                $query->orderBy('price', 'desc');
+                break;
+            default:
+                $query->latest();
+        }
 
-        $courses = $query->paginate(12)->withQueryString();
+        $courses = $query->paginate(12);
 
-        // ✅ NOUVEAU : Catégories pour le filtre
-        $categories = Category::withCount('courses')->get();
+        // Données pour les filtres
+        $categories = Category::where('is_active', true)
+            ->withCount(['courses' => function($q) {
+                $q->where('is_published', true);
+            }])
+            ->get();
 
         return view('courses.index', compact('courses', 'categories'));
     }
 
+    /**
+     * Détail public d'un cours
+     */
+    public function show(Course $course)
+    {
+        // Vérifier si le cours est publié (sauf si l'utilisateur est le propriétaire)
+        if (!$course->is_published && (!auth()->check() || auth()->id() !== $course->instructor_id)) {
+            abort(404);
+        }
+
+        // Charger les relations
+        $course->load([
+            'instructor',
+            'category',
+            'lessons' => function ($query) {
+                $query->orderBy('order');
+            },
+            'quizzes'
+        ]);
+
+        // Vérifier si l'utilisateur est inscrit
+        $is_enrolled = auth()->check() && $course->enrollments()
+                ->where('user_id', auth()->id())
+                ->exists();
+
+        // Cours similaires (même catégorie)
+        $similar_courses = Course::where('is_published', true)
+            ->where('category_id', $course->category_id)
+            ->where('id', '!=', $course->id)
+            ->with(['instructor', 'category'])
+            ->limit(3)
+            ->get();
+
+        return view('courses.show', compact('course', 'similar_courses', 'is_enrolled'));
+    }
+
+
+    /**
+     * Formulaire de création
+     */
     public function create()
     {
-        // ✅ NOUVEAU : Passer les catégories au formulaire
         $categories = Category::all();
         return view('courses.create', compact('categories'));
     }
 
     /**
-     * ✅ AMÉLIORATION : Validation + Upload robuste
+     * Enregistrement d'un nouveau cours
      */
     public function store(Request $request)
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
-            'description' => 'required|string|min:50', // ✅ Min 50 caractères
+            'description' => 'required|string|min:50',
             'thumbnail' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
             'difficulty_level' => 'required|in:beginner,intermediate,advanced',
             'price' => 'required|numeric|min:0|max:9999.99',
             'duration_minutes' => 'nullable|integer|min:1',
             'max_students' => 'nullable|integer|min:1',
-            'category_id' => 'required|exists:categories,id', // ✅ NOUVEAU
+            'category_id' => 'required|exists:categories,id',
             'is_published' => 'boolean',
         ]);
 
-        // Slug unique (TON CODE - PARFAIT)
-        $validated['slug'] = Str::slug($validated['title']);
-        $originalSlug = $validated['slug'];
-        $counter = 1;
-
-        while (Course::where('slug', $validated['slug'])->exists()) {
-            $validated['slug'] = $originalSlug . '-' . $counter++;
-        }
+        // Génération slug unique
+        $validated['slug'] = $this->generateUniqueSlug($validated['title']);
 
         // Upload thumbnail
         if ($request->hasFile('thumbnail')) {
@@ -108,40 +159,29 @@ class CourseController extends Controller
     }
 
     /**
-     * ✅ AMÉLIORATION : Vérifier inscription + progression
+     * Formulaire d'édition
      */
-    public function show(Course $course)
-    {
-        $course->load(['instructor', 'lessons', 'category']);
-
-        $isEnrolled = false;
-        $progress = 0;
-
-        if (auth()->check()) {
-            $enrollment = $course->enrollments()
-                ->where('user_id', auth()->id())
-                ->first();
-
-            if ($enrollment) {
-                $isEnrolled = true;
-                $progress = $enrollment->progress ?? 0;
-            }
-        }
-
-        return view('courses.show', compact('course', 'isEnrolled', 'progress'));
-    }
-
     public function edit(Course $course)
     {
+        // ✅ Vérification manuelle si pas de Policy
+        if (auth()->id() !== $course->instructor_id && !auth()->user()->hasRole('admin')) {
+            abort(403, 'Action non autorisée.');
+        }
+
         $categories = Category::all();
         return view('courses.edit', compact('course', 'categories'));
     }
 
     /**
-     * ✅ AMÉLIORATION : Mise à jour robuste
+     * Mise à jour d'un cours
      */
     public function update(Request $request, Course $course)
     {
+        // ✅ Vérification manuelle
+        if (auth()->id() !== $course->instructor_id && !auth()->user()->hasRole('admin')) {
+            abort(403, 'Action non autorisée.');
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string|min:50',
@@ -156,18 +196,10 @@ class CourseController extends Controller
 
         // Slug unique si titre modifié
         if ($validated['title'] !== $course->title) {
-            $validated['slug'] = Str::slug($validated['title']);
-            $originalSlug = $validated['slug'];
-            $counter = 1;
-
-            while (Course::where('slug', $validated['slug'])
-                ->where('id', '!=', $course->id)
-                ->exists()) {
-                $validated['slug'] = $originalSlug . '-' . $counter++;
-            }
+            $validated['slug'] = $this->generateUniqueSlug($validated['title'], $course->id);
         }
 
-        // Upload + suppression ancienne
+        // Upload thumbnail
         if ($request->hasFile('thumbnail')) {
             if ($course->thumbnail) {
                 Storage::disk('public')->delete($course->thumbnail);
@@ -185,19 +217,48 @@ class CourseController extends Controller
     }
 
     /**
-     * ✅ AMÉLIORATION : Soft delete au lieu de delete
+     * Suppression d'un cours
      */
     public function destroy(Course $course)
     {
+        // ✅ Vérification manuelle
+        if (auth()->id() !== $course->instructor_id && !auth()->user()->hasRole('admin')) {
+            abort(403, 'Action non autorisée.');
+        }
+
         // Nettoyage fichiers
         if ($course->thumbnail) {
             Storage::disk('public')->delete($course->thumbnail);
         }
 
-        // Soft delete
         $course->delete();
 
         return redirect()->route('courses.index')
             ->with('success', '✅ Cours supprimé avec succès !');
+    }
+
+    /**
+     * ✅ MÉTHODE UTILITAIRE : Génération slug unique
+     */
+    private function generateUniqueSlug(string $title, ?int $excludeId = null): string
+    {
+        $slug = Str::slug($title);
+        $originalSlug = $slug;
+        $counter = 1;
+
+        $query = Course::where('slug', $slug);
+        if ($excludeId) {
+            $query->where('id', '!=', $excludeId);
+        }
+
+        while ($query->exists()) {
+            $slug = $originalSlug . '-' . $counter++;
+            $query = Course::where('slug', $slug);
+            if ($excludeId) {
+                $query->where('id', '!=', $excludeId);
+            }
+        }
+
+        return $slug;
     }
 }

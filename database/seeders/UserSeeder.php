@@ -8,48 +8,67 @@ use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        // 1. Créer un administrateur
-        User::firstOrCreate(
-            ['email' => 'admin@test.com'],
-            [
-                'name' => 'Admin User',
-                'password' => Hash::make('password'),
-                'role' => 'admin',
-                'email_verified_at' => now(),
-            ]
-        );
+        // 1. Administrateur
+        User::create([
+            'name' => 'Admin User',
+            'email' => 'admin@example.com',
+            'password' => Hash::make('password'),
+            'role' => 'admin',
+            'email_verified_at' => now(),
+        ]);
 
-        // 2. Créer un formateur
-        User::firstOrCreate(
-            ['email' => 'instructor@test.com'],
+        // 2. Instructeurs
+        $instructors = [
             [
-                'name' => 'Test Instructor',
+                'name' => 'Jean Dupont',
+                'email' => 'jean.dupont@instructor.com',
+                'bio' => 'Expert en développement web avec 10 ans d\'expérience',
+            ],
+            [
+                'name' => 'Marie Martin',
+                'email' => 'marie.martin@instructor.com',
+                'bio' => 'Spécialiste Data Science et Machine Learning',
+            ],
+            [
+                'name' => 'Pierre Durand',
+                'email' => 'pierre.durand@instructor.com',
+                'bio' => 'Designer UX/UI passionné',
+            ],
+        ];
+
+        foreach ($instructors as $instructor) {
+            User::create([
+                'name' => $instructor['name'],
+                'email' => $instructor['email'],
                 'password' => Hash::make('password'),
                 'role' => 'instructor',
+                'bio' => $instructor['bio'],
                 'email_verified_at' => now(),
-            ]
-        );
+            ]);
+        }
 
-        // 3. Créer un étudiant
-        User::firstOrCreate(
-            ['email' => 'student@test.com'],
-            [
-                'name' => 'Test Student',
+        // 3. Étudiants
+        $students = [
+            'Sophie Bernard',
+            'Lucas Petit',
+            'Emma Roux',
+            'Thomas Moreau',
+            'Léa Simon',
+            'Hugo Laurent',
+            'Chloé Michel',
+            'Alexandre Lefebvre',
+        ];
+
+        foreach ($students as $name) {
+            User::create([
+                'name' => $name,
+                'email' => strtolower(str_replace(' ', '.', $name)) . '@student.com',
                 'password' => Hash::make('password'),
                 'role' => 'student',
                 'email_verified_at' => now(),
-            ]
-        );
-
-        // 4. Créer 10 étudiants supplémentaires
-        User::factory(10)->student()->create();
-
-        // 5. Créer 3 formateurs supplémentaires
-        User::factory(3)->instructor()->create();
+            ]);
+        }
     }
 }

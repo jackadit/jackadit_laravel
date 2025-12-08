@@ -183,4 +183,10 @@ class Course extends Model
 
         return $minutes . 'min';
     }
+
+    public function certificates()
+    {
+        return $this->hasMany(Certificate::class);
+    }
+
 }

@@ -6,17 +6,21 @@ use App\Models\Course;
 use App\Models\Lesson;
 use App\Models\Quiz;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
-class QuizController extends Controller
+class QuizController extends Controller implements HasMiddleware
 {
     /**
-     * Middlewares de sécurité
+     * ✅ Définition des middlewares Laravel 11+
      */
-    public function __construct()
+    public static function middleware(): array
     {
-        $this->middleware('auth');
-        $this->middleware('course.ownership')->except(['show']);
-        $this->middleware('course.access')->only(['show']);
+        return [
+            'auth',
+            new Middleware('course.ownership', except: ['show']),
+            new Middleware('course.access', only: ['show']),
+        ];
     }
 
     /**
@@ -28,6 +32,7 @@ class QuizController extends Controller
 
         $quizzes = $lesson->quizzes()
             ->withCount('questions')
+            ->with('attempts') // Si utilisé dans la vue
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -41,7 +46,7 @@ class QuizController extends Controller
     {
         $this->authorizeLesson($course, $lesson);
 
-        // ⭐ FIX : Vérification correcte du quiz existant
+        // Vérifier si quiz existe déjà
         if ($lesson->quizzes()->exists()) {
             $existingQuiz = $lesson->quizzes()->first();
             return redirect()
@@ -69,7 +74,7 @@ class QuizController extends Controller
         // Création via relation
         $quiz = $lesson->quizzes()->create($validated);
 
-        // ⭐ Mettre à jour le content_type de la leçon
+        // Mettre à jour content_type
         $lesson->update(['content_type' => 'quiz']);
 
         return redirect()
@@ -78,19 +83,26 @@ class QuizController extends Controller
     }
 
     /**
-     * Afficher un quiz (avec stats si étudiant)
+     * Afficher un quiz
      */
     public function show(Course $course, Lesson $lesson, Quiz $quiz)
     {
         $this->authorizeLesson($course, $lesson);
         $this->authorizeQuiz($lesson, $quiz);
 
+        // ✅ Instructeur OU étudiant inscrit
+        $user = auth()->user();
+
+        if ($course->instructor_id !== $user->id && !$user->isEnrolledIn($course)) {
+            abort(403, 'Accès non autorisé');
+        }
+
         // Charger questions + réponses
         $quiz->load(['questions.answers' => function ($query) {
             $query->orderBy('order');
         }]);
 
-        // ⭐ NOUVEAU : Stats utilisateur (si étudiant)
+        // Stats utilisateur (si étudiant)
         $userStats = null;
         if (auth()->check()) {
             $userStats = [
@@ -105,7 +117,7 @@ class QuizController extends Controller
                 'passed' => auth()->user()
                     ->quizAttempts()
                     ->where('quiz_id', $quiz->id)
-                    ->where('score', '>=', $quiz->passing_score)
+                    ->where('is_passed', true)
                     ->exists(),
             ];
         }
@@ -134,7 +146,6 @@ class QuizController extends Controller
 
         $validated = $this->validateQuiz($request);
 
-        // ⭐ FIX : Utiliser boolean() au lieu de has()
         $validated['shuffle_questions'] = $request->boolean('shuffle_questions');
         $validated['show_correct_answers'] = $request->boolean('show_correct_answers');
         $validated['is_active'] = $request->boolean('is_active');
@@ -154,7 +165,7 @@ class QuizController extends Controller
         $this->authorizeLesson($course, $lesson);
         $this->authorizeQuiz($lesson, $quiz);
 
-        // ⭐ NOUVEAU : Réinitialiser content_type de la leçon
+        // Réinitialiser content_type si dernier quiz
         if ($lesson->quizzes()->count() === 1) {
             $lesson->update(['content_type' => 'text']);
         }
@@ -167,7 +178,7 @@ class QuizController extends Controller
     }
 
     /**
-     * ⭐ NOUVEAU : Dupliquer un quiz
+     * Dupliquer un quiz
      */
     public function duplicate(Course $course, Lesson $lesson, Quiz $quiz)
     {
@@ -180,7 +191,7 @@ class QuizController extends Controller
         $newQuiz->is_active = false;
         $newQuiz->save();
 
-        // Dupliquer les questions + réponses
+        // Dupliquer questions + réponses
         foreach ($quiz->questions as $question) {
             $newQuestion = $question->replicate();
             $newQuestion->quiz_id = $newQuiz->id;
@@ -199,9 +210,9 @@ class QuizController extends Controller
     }
 
     /**
-     * ⭐ NOUVEAU : Activer/Désactiver rapidement
+     * Activer/Désactiver
      */
-    public function toggleActive(Course $course, Lesson $lesson, Quiz $quiz)
+    public function toggleStatus(Course $course, Lesson $lesson, Quiz $quiz)
     {
         $this->authorizeLesson($course, $lesson);
         $this->authorizeQuiz($lesson, $quiz);
@@ -217,10 +228,7 @@ class QuizController extends Controller
     // MÉTHODES PRIVÉES
     // ========================================
 
-    /**
-     * Validation centralisée
-     */
-    private function validateQuiz(Request $request)
+    private function validateQuiz(Request $request): array
     {
         return $request->validate([
             'title' => 'required|string|max:255',
@@ -239,9 +247,6 @@ class QuizController extends Controller
         ]);
     }
 
-    /**
-     * Vérifier que la leçon appartient au cours
-     */
     private function authorizeLesson(Course $course, Lesson $lesson): void
     {
         if ($lesson->course_id !== $course->id) {
@@ -249,9 +254,6 @@ class QuizController extends Controller
         }
     }
 
-    /**
-     * Vérifier que le quiz appartient à la leçon
-     */
     private function authorizeQuiz(Lesson $lesson, Quiz $quiz): void
     {
         if ($quiz->lesson_id !== $lesson->id) {

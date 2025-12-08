@@ -212,6 +212,48 @@ class QuizAttempt extends Model
     }
 
     /**
+     * Vérifier si la tentative a expiré
+     */
+    public function isExpired(): bool
+    {
+        if (!$this->quiz->time_limit) {
+            return false;
+        }
+
+        $elapsed = now()->diffInMinutes($this->started_at);
+        return $elapsed >= $this->quiz->time_limit;
+    }
+
+    /**
+     * Temps restant en secondes
+     */
+    public function remainingTime(): ?int
+    {
+        if (!$this->quiz->time_limit) {
+            return null;
+        }
+
+        $elapsed = now()->diffInSeconds($this->started_at);
+        $limit = $this->quiz->time_limit * 60; // Convertir en secondes
+
+        return max(0, $limit - $elapsed);
+    }
+
+    /**
+     * Soumission automatique
+     */
+    public function autoSubmit(): void
+    {
+        $this->update([
+            'completed_at' => now(),
+            'time_spent' => $this->quiz->time_limit * 60,
+        ]);
+
+        $this->calculateScore();
+    }
+
+
+    /**
      * Durée du quiz formatée
      */
     public function getDurationFormattedAttribute(): string

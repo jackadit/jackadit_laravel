@@ -1,58 +1,103 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Http\Controllers;
+
+use App\Models\Category;
+use App\Models\Course;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class HomeController extends Controller
 {
     /**
-     * Page d'accueil
+     * Affiche la page d'accueil publique
+     *
+     * ✅ Optimisations :
+     * - Cache des données statiques (1h)
+     * - Eager loading des relations
+     * - Queries optimisées
      */
     public function index()
     {
-        $cours = [
-            [
-                'titre' => 'Introduction à l\'accessibilité numérique',
-                'description' => 'Apprenez à rendre vos sites web accessibles à tous les utilisateurs, y compris les personnes en situation de handicap.',
-                'duree' => '12 leçons',
-                'icon' => '♿',
-                'url' => route('cours.category', ['category' => 'accessibilite'])
-            ],
-            [
-                'titre' => 'Base de données',
-                'description' => 'Apprenez à concevoir une base de données.',
-                'duree' => '8 leçons',
-                'icon' => '🗄️',
-                'url' => route('cours.category', ['category' => 'base-de-donnees'])
-            ],
-            [
-                'titre' => 'Introduction à VBA',
-                'description' => 'Les bases de la programmation Excel VBA.',
-                'duree' => '6 leçons',
-                'icon' => '📊',
-                'url' => route('cours.category', ['category' => 'vba'])
-            ],
-            [
-                'titre' => 'htmlspecialchars()',
-                'description' => 'OEIS - Qualité Logique/sécurité et Organisation.',
-                'duree' => '3 leçons',
-                'icon' => '🔒',
-                'url' => route('cours.category', ['category' => 'htmlspecialchars'])
-            ],
-            [
-                'titre' => 'Introduction à Windows XP',
-                'description' => 'OS 03 : Ouvrir l\'invité personnel élévant...',
-                'duree' => '13 leçons',
-                'icon' => '💻',
-                'url' => route('cours.category', ['category' => 'windows-xp'])
-            ]
-        ];
+        // ========================================
+        // COURS EN VEDETTE
+        // ========================================
+        $featured_courses = Cache::remember('home.featured_courses', 3600, function () {
+            return Course::where('is_published', true)
+                ->where('is_featured', true)
+                ->with(['instructor', 'category'])
+                ->limit(6)
+                ->get();
+        });
 
-        return view('home', [
-            'pageTitle' => 'Accueil - Jackadit.com',
-            'metaDescription' => 'Apprenez le développement web avec des cours complets et progressifs',
-            'cours' => $cours
-        ]);
+        // ========================================
+        // COURS RÉCENTS
+        // ========================================
+        $recent_courses = Cache::remember('home.recent_courses', 1800, function () {
+            return Course::where('is_published', true)
+                ->with(['instructor', 'category'])
+                ->latest()
+                ->limit(3)
+                ->get();
+        });
+
+        // ========================================
+        // COURS POPULAIRES
+        // ========================================
+        $popular_courses = Cache::remember('home.popular_courses', 3600, function () {
+            return Course::where('is_published', true)
+                ->with(['instructor', 'category'])
+                ->withCount('enrollments')
+                ->orderBy('enrollments_count', 'desc')
+                ->limit(4)
+                ->get();
+        });
+
+        // ========================================
+        // STATISTIQUES GLOBALES
+        // ========================================
+        $stats = Cache::remember('home.stats', 1800, function () {
+            return [
+                'total_courses' => Course::where('is_published', true)->count(),
+                'total_students' => User::where('role', 'student')->count(),
+                'total_instructors' => User::where('role', 'instructor')->count(),
+                'total_hours' => Course::where('is_published', true)->sum('duration'), // Si tu as un champ duration
+            ];
+        });
+
+        // ========================================
+        // CATÉGORIES ACTIVES
+        // ========================================
+        $categories = Cache::remember('home.categories', 3600, function () {
+            return Category::where('is_active', true)
+                ->withCount(['courses' => function ($query) {
+                    $query->where('is_published', true);
+                }])
+                ->having('courses_count', '>', 0) // ✅ Uniquement catégories avec cours
+                ->get();
+        });
+
+        return view('home.index', compact(
+            'featured_courses',
+            'recent_courses',
+            'popular_courses',
+            'stats',
+            'categories'
+        ));
+    }
+
+    /**
+     * ✅ BONUS : Méthode pour vider le cache (admin uniquement)
+     */
+    public function clearCache()
+    {
+        Cache::forget('home.featured_courses');
+        Cache::forget('home.recent_courses');
+        Cache::forget('home.popular_courses');
+        Cache::forget('home.stats');
+        Cache::forget('home.categories');
+
+        return back()->with('success', '✅ Cache de la page d\'accueil vidé !');
     }
 }
