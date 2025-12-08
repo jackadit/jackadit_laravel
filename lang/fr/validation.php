@@ -265,7 +265,7 @@ return [
         'subject'                  => 'sujet',
         'tag'                      => 'mot clé',
         'tags'                     => 'mots clés',
-        'teacher'                  => 'professeur',
+        'instructor'                  => 'professeur',
         'terms'                    => 'conditions',
         'test_description'         => 'description du test',
         'test_locale'              => 'localisation du test',

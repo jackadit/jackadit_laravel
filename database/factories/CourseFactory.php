@@ -14,10 +14,9 @@ class CourseFactory extends Factory
             'slug' => fake()->slug(),
             'description' => fake()->paragraph(5),
             'thumbnail' => fake()->imageUrl(640, 480, 'education', true),
-            'level' => fake()->randomElement(['beginner', 'intermediate', 'advanced']),
             'price' => fake()->randomFloat(2, 0, 199),
             'is_published' => fake()->boolean(70),
-            'teacher_id' => User::factory(),
+            'instructor_id' => User::factory(),
         ];
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -14,7 +15,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role', // admin, instructor, student
+        'role',
     ];
 
     protected $hidden = [
@@ -30,40 +31,31 @@ class User extends Authenticatable
         ];
     }
 
-    // ============================================
-    // RELATIONS
-    // ============================================
-
     /**
-     * Cours créés par cet utilisateur (si instructeur)
+     * Relation : Un utilisateur peut s'inscrire à plusieurs cours
      */
-    public function createdCourses()
+    public function enrollments(): HasMany
     {
-        return $this->hasMany(Course::class, 'instructor_id');
+        return $this->hasMany(Enrollment::class);
     }
 
     /**
-     * Tentatives de quiz effectuées
-     */
-    public function quizAttempts()
-    {
-        return $this->hasMany(QuizAttempt::class);
-    }
-
-    /**
-     * Cours auxquels l'utilisateur est inscrit (relation future)
-     * Note : La table 'enrollments' sera créée en Phase 2
+     * Relation : Cours auxquels l'utilisateur est inscrit
      */
     public function enrolledCourses()
     {
         return $this->belongsToMany(Course::class, 'enrollments')
-            ->withPivot('progress', 'enrolled_at', 'completed_at')
+            ->withPivot('progress', 'status', 'completed_at', 'last_accessed_at')
             ->withTimestamps();
     }
 
-    // ============================================
-    // HELPER METHODS
-    // ============================================
+    /**
+     * Relation : Un utilisateur peut créer plusieurs cours (si formateur)
+     */
+    public function createdCourses(): HasMany
+    {
+        return $this->hasMany(Course::class, 'instructor_id');
+    }
 
     /**
      * Vérifie si l'utilisateur est administrateur
@@ -90,18 +82,13 @@ class User extends Authenticatable
     }
 
     /**
-     * Vérifie si l'utilisateur a un rôle spécifique
+     * Vérifie si l'utilisateur est inscrit à un cours
      */
-    public function hasRole(string $role): bool
+    public function isEnrolledIn(Course $course): bool
     {
-        return $this->role === $role;
-    }
-
-    /**
-     * Vérifie si l'utilisateur peut gérer un cours
-     */
-    public function canManageCourse(Course $course): bool
-    {
-        return $this->isAdmin() || $course->instructor_id === $this->id;
+        return $this->enrollments()
+            ->where('course_id', $course->id)
+            ->where('status', 'active')
+            ->exists();
     }
 }

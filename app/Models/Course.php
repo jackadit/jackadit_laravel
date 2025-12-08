@@ -6,31 +6,40 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\SoftDeletes; // ✅ AJOUT
 use Illuminate\Support\Str;
 
 class Course extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes; // ✅ AJOUT
 
     protected $fillable = [
         'title',
         'slug',
         'description',
         'thumbnail',
-        'difficulty_level',  // ✅ Renommé de 'level'
+        'difficulty_level', // ✅ Renommer colonne BDD pour correspondre
         'price',
+        'duration_minutes', // ✅ NOUVEAU
+        'max_students',     // ✅ NOUVEAU
         'is_published',
-        'instructor_id',     // ✅ Renommé de 'instructor_id'
+        'instructor_id',
+        'category_id',      // ✅ NOUVEAU
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
         'is_published' => 'boolean',
+        'duration_minutes' => 'integer',
+        'max_students' => 'integer',
     ];
 
+    // ✅ AJOUT : Dates pour soft deletes
+    protected $dates = ['deleted_at'];
+
     // ============================================
-    // AUTO-GÉNÉRATION DU SLUG
+    // AUTO-GÉNÉRATION DU SLUG (TON CODE - PARFAIT)
     // ============================================
     protected static function boot()
     {
@@ -42,7 +51,6 @@ class Course extends Model
             }
         });
 
-        // ✨ BONUS : Mise à jour du slug si le titre change
         static::updating(function ($course) {
             if ($course->isDirty('title') && empty($course->slug)) {
                 $course->slug = Str::slug($course->title);
@@ -54,143 +62,125 @@ class Course extends Model
     // RELATIONS
     // ============================================
 
-    /**
-     * Relation : Formateur propriétaire du cours
-     * ✅ Renommé de instructor() → instructor()
-     */
     public function instructor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'instructor_id');
     }
 
-    /**
-     * Relation : Un cours a plusieurs leçons (ordonnées)
-     */
     public function lessons(): HasMany
     {
         return $this->hasMany(Lesson::class)->orderBy('order');
     }
 
-    /**
-     * Relation : Tous les quiz du cours (via les leçons)
-     * ✨ NOUVELLE RELATION
-     */
-    public function quizzes(): HasManyThrough
+    public function enrollments(): HasMany
     {
-        return $this->hasManyThrough(Quiz::class, Lesson::class);
+        return $this->hasMany(Enrollment::class);
+    }
+
+    public function students(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'enrollments')
+            ->withPivot('progress', 'status', 'completed_at', 'last_accessed_at')
+            ->withTimestamps();
+    }
+
+    // ✅ NOUVELLE RELATION : Catégorie
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
     }
 
     // ============================================
-    // ACCESSORS
+    // SCOPES (TON CODE - PARFAIT)
     // ============================================
 
-    /**
-     * Accessor : Nombre de leçons
-     */
-    public function getLessonsCountAttribute()
-    {
-        return $this->lessons()->count();
-    }
-
-    /**
-     * Accessor : Durée totale du cours
-     */
-    public function getTotalDurationAttribute()
-    {
-        $totalMinutes = $this->lessons()->sum('duration');
-
-        if (!$totalMinutes) {
-            return 'N/A';
-        }
-
-        $hours = floor($totalMinutes / 60);
-        $minutes = $totalMinutes % 60;
-
-        if ($hours > 0) {
-            return $hours . 'h ' . $minutes . 'min';
-        }
-
-        return $minutes . 'min';
-    }
-
-    // ============================================
-    // SCOPES
-    // ============================================
-
-    /**
-     * Scope : Uniquement les cours publiés
-     *
-     * Utilisation : Course::published()->get()
-     */
     public function scopePublished($query)
     {
         return $query->where('is_published', true);
     }
 
-    /**
-     * Scope : Filtrer par formateur
-     *
-     * Utilisation : Course::byInstructor(5)->get()
-     */
     public function scopeByInstructor($query, int $instructorId)
     {
         return $query->where('instructor_id', $instructorId);
     }
 
+    // ✅ NOUVEAUX SCOPES UTILES
+    public function scopeByCategory($query, int $categoryId)
+    {
+        return $query->where('category_id', $categoryId);
+    }
+
+    public function scopeByLevel($query, string $level)
+    {
+        return $query->where('difficulty_level', $level);
+    }
+
+    public function scopeSearch($query, string $search)
+    {
+        return $query->where(function ($q) use ($search) {
+            $q->where('title', 'like', "%{$search}%")
+                ->orWhere('description', 'like', "%{$search}%");
+        });
+    }
+
     // ============================================
-    // HELPER METHODS
+    // HELPER METHODS (TON CODE - EXCELLENT)
     // ============================================
 
-    /**
-     * Nombre total de quiz dans le cours
-     */
-    public function totalQuizzes(): int
-    {
-        return $this->quizzes()->count();
-    }
-
-    /**
-     * Vérifie si le cours appartient à un utilisateur
-     *
-     * @param User $user
-     * @return bool
-     */
-    public function isOwnedBy(User $user): bool
-    {
-        return $this->instructor_id === $user->id;
-    }
-
-    /**
-     * URL vers la page publique du cours
-     *
-     * @return string
-     */
-    public function url(): string
-    {
-        return route('courses.show', $this);
-    }
-
-    /**
-     * Vérifier si le cours est gratuit
-     *
-     * @return bool
-     */
     public function isFree(): bool
     {
         return $this->price == 0;
     }
 
-    /**
-     * Prix formaté
-     *
-     * @return string
-     */
     public function formattedPrice(): string
     {
         if ($this->isFree()) {
             return 'Gratuit';
         }
-
         return number_format($this->price, 2, ',', ' ') . ' €';
+    }
+
+    public function enrolledCount(): int
+    {
+        return $this->enrollments()->where('status', 'active')->count();
+    }
+
+    public function isOwnedBy(User $user): bool
+    {
+        return $this->instructor_id === $user->id;
+    }
+
+    // ✅ NOUVEAU : Places restantes
+    public function availableSeats(): ?int
+    {
+        if (!$this->max_students) {
+            return null; // Illimité
+        }
+        return max(0, $this->max_students - $this->enrolledCount());
+    }
+
+    public function isFull(): bool
+    {
+        if (!$this->max_students) {
+            return false;
+        }
+        return $this->enrolledCount() >= $this->max_students;
+    }
+
+    // ✅ NOUVEAU : Durée formatée
+    public function formattedDuration(): string
+    {
+        if (!$this->duration_minutes) {
+            return 'N/A';
+        }
+
+        $hours = floor($this->duration_minutes / 60);
+        $minutes = $this->duration_minutes % 60;
+
+        if ($hours > 0) {
+            return $hours . 'h' . ($minutes > 0 ? ' ' . $minutes . 'min' : '');
+        }
+
+        return $minutes . 'min';
     }
 }

@@ -436,7 +436,7 @@ class DatabaseSeeder extends Seeder
     {
         // Roles
         Role::create(['name' => 'admin']);
-        Role::create(['name' => 'teacher']);
+        Role::create(['name' => 'instructor']);
         Role::create(['name' => 'student']);
 
         // Users

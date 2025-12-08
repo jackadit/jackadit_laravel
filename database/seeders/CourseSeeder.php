@@ -15,7 +15,7 @@ class CourseSeeder extends Seeder
 
         // Créer des cours
         Course::factory()->count(12)->create([
-            'teacher_id' => $teachers->random()->id,
+            'instructor_id' => $teachers->random()->id,
         ]);
     }
 }

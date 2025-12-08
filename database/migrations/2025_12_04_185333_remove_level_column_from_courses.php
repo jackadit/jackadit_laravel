@@ -1,0 +1,30 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('courses', function (Blueprint $table) {
+            // ✅ Supprimer uniquement 'level' si elle existe
+            if (Schema::hasColumn('courses', 'level')) {
+                $table->dropColumn('level');
+            }
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('courses', function (Blueprint $table) {
+            // ✅ Recréer 'level' en cas de rollback
+            if (!Schema::hasColumn('courses', 'level')) {
+                $table->enum('level', ['beginner', 'intermediate', 'advanced'])
+                    ->default('beginner')
+                    ->after('thumbnail');
+            }
+        });
+    }
+};

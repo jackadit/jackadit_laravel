@@ -4,36 +4,52 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
 {
+    /**
+     * Run the database seeds.
+     */
     public function run(): void
     {
-        // Créer un admin
-        User::create([
-            'name' => 'Admin User',
-            'email' => 'admin@example.com',
-            'password' => bcrypt('password'),
-            'email_verified_at' => now(),
-        ]);
+        // 1. Créer un administrateur
+        User::firstOrCreate(
+            ['email' => 'admin@test.com'],
+            [
+                'name' => 'Admin User',
+                'password' => Hash::make('password'),
+                'role' => 'admin',
+                'email_verified_at' => now(),
+            ]
+        );
 
-        // Créer un enseignant
-        User::create([
-            'name' => 'Teacher User',
-            'email' => 'teacher@example.com',
-            'password' => bcrypt('password'),
-            'email_verified_at' => now(),
-        ]);
+        // 2. Créer un formateur
+        User::firstOrCreate(
+            ['email' => 'instructor@test.com'],
+            [
+                'name' => 'Test Instructor',
+                'password' => Hash::make('password'),
+                'role' => 'instructor',
+                'email_verified_at' => now(),
+            ]
+        );
 
-        // Créer un étudiant
-        User::create([
-            'name' => 'Student User',
-            'email' => 'student@example.com',
-            'password' => bcrypt('password'),
-            'email_verified_at' => now(),
-        ]);
+        // 3. Créer un étudiant
+        User::firstOrCreate(
+            ['email' => 'student@test.com'],
+            [
+                'name' => 'Test Student',
+                'password' => Hash::make('password'),
+                'role' => 'student',
+                'email_verified_at' => now(),
+            ]
+        );
 
-        // Créer 10 utilisateurs aléatoires
-        User::factory(10)->create();
+        // 4. Créer 10 étudiants supplémentaires
+        User::factory(10)->student()->create();
+
+        // 5. Créer 3 formateurs supplémentaires
+        User::factory(3)->instructor()->create();
     }
 }
