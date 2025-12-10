@@ -21,14 +21,13 @@ class QuestionSeeder extends Seeder
 
         foreach ($quizzes as $quiz) {
             // Créer 5 à 10 questions par quiz
-            $questionCount = rand(5, 10);
+            $questionCount = rand(2, 5);
 
             for ($i = 1; $i <= $questionCount; $i++) {
                 // Alterner les types de questions
                 $type = match ($i % 5) {
                     0 => Question::TYPE_TRUE_FALSE,
                     1 => Question::TYPE_MULTIPLE_CHOICE,
-                    2 => Question::TYPE_SHORT_ANSWER,
                     default => Question::TYPE_SINGLE_CHOICE,
                 };
 
@@ -61,7 +60,6 @@ class QuestionSeeder extends Seeder
             Question::TYPE_SINGLE_CHOICE => "Question $number : " . $this->getRandomSingleChoiceQuestion(),
             Question::TYPE_MULTIPLE_CHOICE => "Question $number : " . $this->getRandomMultipleChoiceQuestion(),
             Question::TYPE_TRUE_FALSE => $this->getRandomTrueFalseQuestion(),
-            Question::TYPE_SHORT_ANSWER => "Question $number : " . $this->getRandomShortAnswerQuestion(),
             default => "Question $number",
         };
     }
@@ -126,23 +124,6 @@ class QuestionSeeder extends Seeder
     }
 
     /**
-     * Questions à réponse courte
-     */
-    private function getRandomShortAnswerQuestion(): string
-    {
-        $questions = [
-            "Quel est le nom du framework PHP que nous utilisons ?",
-            "Quel ORM est intégré dans Laravel ?",
-            "Quel moteur de template utilise Laravel ?",
-            "Quel est le nom du gestionnaire de paquets PHP ?",
-            "Quelle commande liste toutes les routes ?",
-            "Comment s'appelle le fichier de configuration principal ?",
-        ];
-
-        return $questions[array_rand($questions)];
-    }
-
-    /**
      * Difficulté aléatoire
      */
     private function getRandomDifficulty(): string
@@ -163,7 +144,6 @@ class QuestionSeeder extends Seeder
     {
         return match ($type) {
             Question::TYPE_TRUE_FALSE => rand(5, 10),
-            Question::TYPE_SHORT_ANSWER => rand(10, 20),
             Question::TYPE_SINGLE_CHOICE => rand(10, 15),
             Question::TYPE_MULTIPLE_CHOICE => rand(15, 25),
             default => 10,

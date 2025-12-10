@@ -62,19 +62,22 @@ class HomeController extends Controller
                 'total_courses' => Course::where('is_published', true)->count(),
                 'total_students' => User::where('role', 'student')->count(),
                 'total_instructors' => User::where('role', 'instructor')->count(),
-                'total_hours' => Course::where('is_published', true)->sum('duration'), // Si tu as un champ duration
+                'total_hours' => Course::where('is_published', true)->sum('duration_minutes') ?? 0,
             ];
         });
 
         // ========================================
-        // CATÉGORIES ACTIVES
+        // CATÉGORIES ACTIVES (✅ CORRECTION FINALE)
         // ========================================
         $categories = Cache::remember('home.categories', 3600, function () {
             return Category::where('is_active', true)
+                ->whereHas('courses', function($q) {
+                    $q->where('is_published', true);
+                })
                 ->withCount(['courses' => function ($query) {
                     $query->where('is_published', true);
                 }])
-                ->having('courses_count', '>', 0) // ✅ Uniquement catégories avec cours
+                ->orderBy('name')
                 ->get();
         });
 
@@ -92,6 +95,7 @@ class HomeController extends Controller
      */
     public function clearCache()
     {
+        // Vider tous les caches de la home
         Cache::forget('home.featured_courses');
         Cache::forget('home.recent_courses');
         Cache::forget('home.popular_courses');
@@ -99,5 +103,15 @@ class HomeController extends Controller
         Cache::forget('home.categories');
 
         return back()->with('success', '✅ Cache de la page d\'accueil vidé !');
+    }
+
+    /**
+     * ✅ BONUS 2 : Vider TOUT le cache applicatif
+     */
+    public function clearAllCache()
+    {
+        Cache::flush();
+
+        return back()->with('success', '✅ Tout le cache applicatif a été vidé !');
     }
 }

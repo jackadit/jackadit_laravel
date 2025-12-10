@@ -49,21 +49,37 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(
             \App\Events\QuizCompleted::class,
-            \App\Listeners\UpdateQuizStatistics::class
+            \App\Listeners\UpdateQuizStatistic::class
         );
 
         // ============================================
-        // GATES (Permissions)
+        // GATES (Permissions) - SYSTÈME SANS SPATIE
         // ============================================
 
-        Gate::define('manage-courses', function ($user) {
-            return in_array($user->role, ['instructor', 'admin']);
-        });
-
+        // 🔒 Admin uniquement
         Gate::define('access-admin', function ($user) {
             return $user->role === 'admin';
         });
 
+        // 🔒 Admin peut tout gérer
+        Gate::define('manage-users', function ($user) {
+            return $user->role === 'admin';
+        });
+
+        Gate::define('manage-all-courses', function ($user) {
+            return $user->role === 'admin';
+        });
+
+        // 🔒 Instructor peut gérer ses propres cours
+        Gate::define('manage-courses', function ($user) {
+            return in_array($user->role, ['instructor', 'admin']);
+        });
+
+        Gate::define('edit-own-course', function ($user, $course) {
+            return $user->role === 'instructor' && $course->instructor_id === $user->id;
+        });
+
+        // 🔒 Student peut suivre un cours si inscrit
         Gate::define('take-course', function ($user, $course) {
             return $user->enrollments()
                 ->where('course_id', $course->id)

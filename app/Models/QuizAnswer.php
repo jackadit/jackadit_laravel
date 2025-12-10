@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
-class UserQuizAnswer extends Model
+class QuizAnswer extends Model
 {
     use HasFactory;
 
@@ -17,20 +17,24 @@ class UserQuizAnswer extends Model
     // ============================================
 
     protected $fillable = [
-        'user_id',
         'quiz_attempt_id',
         'question_id',
         'answer_id',
+        'selected_answers',
+        'answer_text',
         'is_correct',
         'points_earned',
+        'feedback',
         'time_taken',
-        'user_answer_text',
+        'answered_at',
     ];
 
     protected $casts = [
+        'selected_answers' => 'array',
         'is_correct' => 'boolean',
         'points_earned' => 'decimal:2',
         'time_taken' => 'integer',
+        'answered_at' => 'datetime',
     ];
 
     protected $attributes = [

@@ -16,11 +16,9 @@ class Question extends Model
     // CONSTANTES - TYPES DE QUESTIONS
     // ============================================
 
-    const TYPE_SINGLE_CHOICE = 'single_choice';      // QCM (1 réponse)
-    const TYPE_MULTIPLE_CHOICE = 'multiple_choice';  // QCM (plusieurs réponses)
+    const TYPE_SINGLE_CHOICE = 'single';      // QCM (1 réponse)
+    const TYPE_MULTIPLE_CHOICE = 'multiple';  // QCM (plusieurs réponses)
     const TYPE_TRUE_FALSE = 'true_false';            // Vrai/Faux
-    const TYPE_SHORT_ANSWER = 'short_answer';        // Texte court
-    const TYPE_ESSAY = 'essay';                      // Texte long (non noté auto)
 
     // ============================================
     // CONSTANTES - NIVEAUX DE DIFFICULTÉ
@@ -101,7 +99,7 @@ class Question extends Model
      */
     public function userAnswers(): HasMany
     {
-        return $this->hasMany(UserQuizAnswer::class);
+        return $this->hasMany(QuizAnswer::class);
     }
 
     // ============================================
@@ -177,8 +175,6 @@ class Question extends Model
             self::TYPE_SINGLE_CHOICE => 'Choix unique',
             self::TYPE_MULTIPLE_CHOICE => 'Choix multiples',
             self::TYPE_TRUE_FALSE => 'Vrai/Faux',
-            self::TYPE_SHORT_ANSWER => 'Réponse courte',
-            self::TYPE_ESSAY => 'Texte libre',
             default => 'Type inconnu',
         };
     }
@@ -288,12 +284,6 @@ class Question extends Model
 
             // QCM à choix multiples
             self::TYPE_MULTIPLE_CHOICE => $this->validateMultipleChoice((array)$userAnswer),
-
-            // Réponse courte
-            self::TYPE_SHORT_ANSWER => $this->validateShortAnswer((string)$userAnswer),
-
-            // Essai (non validé automatiquement)
-            self::TYPE_ESSAY => false,
 
             default => false,
         };
@@ -426,8 +416,6 @@ class Question extends Model
             self::TYPE_SINGLE_CHOICE => 'Choix unique',
             self::TYPE_MULTIPLE_CHOICE => 'Choix multiples',
             self::TYPE_TRUE_FALSE => 'Vrai/Faux',
-            self::TYPE_SHORT_ANSWER => 'Réponse courte',
-            self::TYPE_ESSAY => 'Texte libre',
         ];
     }
 

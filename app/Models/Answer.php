@@ -175,7 +175,7 @@ class Answer extends Model
      */
     public function isChosenBy(int $userId, ?int $quizAttemptId = null): bool
     {
-        $query = UserQuizAnswer::where('answer_id', $this->id)
+        $query = QuizAnswer::where('answer_id', $this->id)
             ->where('user_id', $userId);
 
         if ($quizAttemptId) {

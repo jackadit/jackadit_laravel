@@ -1,293 +1,298 @@
-@extends('layouts.app')
+<x-app-layout>
+    <x-slot name="header">
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+            Ajouter une question au quiz : {{ $quiz->title }}
+        </h2>
+    </x-slot>
 
-@section('title', 'Ajouter une Question')
-
-@section('content')
-    <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12">
-        <div class="max-w-4xl mx-auto px-4">
-
-            {{-- En-tête --}}
-            <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h1 class="text-3xl font-bold text-gray-900">➕ Nouvelle Question</h1>
-                        <p class="text-gray-600 mt-2">
-                            Quiz : <span class="font-semibold">{{ $quiz->title }}</span>
-                        </p>
-                    </div>
-                    <a href="{{ route('quizzes.show', [$course, $lesson, $quiz]) }}"
-                       class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition">
-                        ← Retour
-                    </a>
-                </div>
-            </div>
-
-            {{-- Formulaire --}}
-            <div class="bg-white rounded-xl shadow-lg p-8">
-                <form method="POST" action="{{ route('questions.store', [$course, $lesson, $quiz]) }}" id="questionForm">
+    <div class="py-12">
+        <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
+            <div class="bg-white rounded-lg shadow p-8">
+                <form action="{{ route('questions.store') }}" method="POST" id="questionForm">
                     @csrf
+                    <input type="hidden" name="quiz_id" value="{{ $quiz->id }}">
 
-                    {{-- Texte de la question --}}
-                    <div class="mb-6">
-                        <label for="question_text" class="block text-sm font-medium text-gray-700 mb-2">
-                            ❓ Question <span class="text-red-500">*</span>
-                        </label>
-                        <textarea
-                            name="question_text"
-                            id="question_text"
-                            rows="3"
-                            required
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('question_text') border-red-500 @enderror"
-                            placeholder="Ex: Quelle est la capitale de la France ?">{{ old('question_text') }}</textarea>
-                        @error('question_text')
-                        <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    {{-- Type de question --}}
+                    <!-- Type de question -->
                     <div class="mb-6">
                         <label for="type" class="block text-sm font-medium text-gray-700 mb-2">
-                            🎯 Type de Question <span class="text-red-500">*</span>
+                            Type de question *
                         </label>
-                        <select
-                            name="type"
-                            id="type"
-                            required
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent @error('type') border-red-500 @enderror"
-                        >
-                            <option value="">-- Choisir un type --</option>
-                            <option value="multiple_choice" {{ old('type') == 'multiple_choice' ? 'selected' : '' }}>Choix multiples (QCM)</option>
-                            <option value="true_false" {{ old('type') == 'true_false' ? 'selected' : '' }}>Vrai / Faux</option>
-                            <option value="short_answer" {{ old('type') == 'short_answer' ? 'selected' : '' }}>Réponse courte</option>
+                        <select name="type"
+                                id="type"
+                                class="w-full rounded-md border-gray-300"
+                                required
+                                onchange="toggleQuestionType()">
+                            <option value="">Sélectionnez un type</option>
+                            <option value="multiple_choice" {{ old('type') == 'multiple_choice' ? 'selected' : '' }}>
+                                Choix multiple (QCM)
+                            </option>
+                            <option value="true_false" {{ old('type') == 'true_false' ? 'selected' : '' }}>
+                                Vrai/Faux
+                            </option>
+                            <option value="text" {{ old('type') == 'text' ? 'selected' : '' }}>
+                                Réponse texte
+                            </option>
                         </select>
                         @error('type')
                         <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                         @enderror
                     </div>
 
-                    {{-- SECTION QCM --}}
-                    <div id="qcm_section" class="hidden mb-6">
-                        <label class="block text-sm font-medium text-gray-700 mb-3">
-                            ✅ Options de réponses
+                    <!-- Question -->
+                    <div class="mb-6">
+                        <label for="question_text" class="block text-sm font-medium text-gray-700 mb-2">
+                            Question *
                         </label>
+                        <textarea name="question_text"
+                                  id="question_text"
+                                  rows="3"
+                                  class="w-full rounded-md border-gray-300 @error('question_text') border-red-500 @enderror"
+                                  required>{{ old('question_text') }}</textarea>
+                        @error('question_text')
+                        <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
 
-                        <div id="optionsList" class="space-y-3">
-                            {{-- Option A --}}
-                            <div id="option_0" class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                <span class="text-gray-600 font-medium w-6">A)</span>
-                                <input
-                                    type="text"
-                                    data-option-text="0"
-                                    placeholder="Option 1"
-                                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        name="correct_option_radio"
-                                        value="0"
-                                        class="w-4 h-4 text-green-600">
-                                    <span class="text-sm text-gray-700">✅ Correct</span>
-                                </label>
+                    <!-- Options pour QCM (caché par défaut) -->
+                    <div id="multipleChoiceOptions" class="mb-6 hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Options de réponse *
+                        </label>
+                        <div id="optionsContainer" class="space-y-3">
+                            <div class="flex gap-2 items-center option-row">
+                                <input type="radio" name="correct_option" value="0" class="mt-1">
+                                <input type="text"
+                                       name="options[]"
+                                       placeholder="Option 1"
+                                       class="flex-1 rounded-md border-gray-300">
+                                <button type="button"
+                                        onclick="removeOption(this)"
+                                        class="bg-red-500 text-white px-3 py-2 rounded-md hover:bg-red-600 hidden">
+                                    ✕
+                                </button>
                             </div>
-
-                            {{-- Option B --}}
-                            <div id="option_1" class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                <span class="text-gray-600 font-medium w-6">B)</span>
-                                <input
-                                    type="text"
-                                    data-option-text="1"
-                                    placeholder="Option 2"
-                                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        name="correct_option_radio"
-                                        value="1"
-                                        class="w-4 h-4 text-green-600">
-                                    <span class="text-sm text-gray-700">✅ Correct</span>
-                                </label>
+                            <div class="flex gap-2 items-center option-row">
+                                <input type="radio" name="correct_option" value="1" class="mt-1">
+                                <input type="text"
+                                       name="options[]"
+                                       placeholder="Option 2"
+                                       class="flex-1 rounded-md border-gray-300">
+                                <button type="button"
+                                        onclick="removeOption(this)"
+                                        class="bg-red-500 text-white px-3 py-2 rounded-md hover:bg-red-600 hidden">
+                                    ✕
+                                </button>
                             </div>
                         </div>
-
-                        <button
-                            type="button"
-                            onclick="addOption()"
-                            class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
-                            ➕ Ajouter une option
+                        <button type="button"
+                                onclick="addOption()"
+                                class="mt-3 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                            + Ajouter une option
                         </button>
+                        <p class="text-sm text-gray-500 mt-2">Cochez la bonne réponse</p>
                     </div>
 
-                    {{-- SECTION RÉPONSE SIMPLE --}}
-                    <div id="simple_section" class="hidden mb-6">
-                        <label for="simple_answer" class="block text-sm font-medium text-gray-700 mb-2">
-                            ✅ Bonne réponse
+                    <!-- Réponse pour Vrai/Faux (caché par défaut) -->
+                    <div id="trueFalseAnswer" class="mb-6 hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Bonne réponse *
                         </label>
-                        <input
-                            type="text"
-                            id="simple_answer"
-                            placeholder="Ex: Vrai / Paris / 42"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <div class="space-y-2">
+                            <label class="flex items-center p-3 border rounded-md cursor-pointer hover:bg-gray-50">
+                                <input type="radio"
+                                       name="correct_answer"
+                                       value="true"
+                                       class="mr-3">
+                                <span>✅ Vrai</span>
+                            </label>
+                            <label class="flex items-center p-3 border rounded-md cursor-pointer hover:bg-gray-50">
+                                <input type="radio"
+                                       name="correct_answer"
+                                       value="false"
+                                       class="mr-3">
+                                <span>❌ Faux</span>
+                            </label>
+                        </div>
                     </div>
 
-                    {{-- Points --}}
-                    <div class="mb-6">
-                        <label for="points" class="block text-sm font-medium text-gray-700 mb-2">
-                            🎯 Points
+                    <!-- Réponse pour texte (caché par défaut) -->
+                    <div id="textAnswer" class="mb-6 hidden">
+                        <label for="correct_answer_text" class="block text-sm font-medium text-gray-700 mb-2">
+                            Réponse attendue (optionnel)
                         </label>
-                        <input
-                            type="number"
-                            name="points"
-                            id="points"
-                            value="{{ old('points', 1) }}"
-                            min="1"
-                            required
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <textarea name="correct_answer_text"
+                                  id="correct_answer_text"
+                                  rows="3"
+                                  class="w-full rounded-md border-gray-300"
+                                  placeholder="Laissez vide pour une correction manuelle">{{ old('correct_answer_text') }}</textarea>
+                        <p class="text-sm text-gray-500 mt-1">Cette réponse servira de référence pour la correction</p>
                     </div>
 
-                    {{-- Explication --}}
+                    <!-- Explication -->
                     <div class="mb-6">
                         <label for="explanation" class="block text-sm font-medium text-gray-700 mb-2">
-                            💡 Explication (optionnel)
+                            Explication (optionnel)
                         </label>
-                        <textarea
-                            name="explanation"
-                            id="explanation"
-                            rows="3"
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            placeholder="Explication de la bonne réponse...">{{ old('explanation') }}</textarea>
+                        <textarea name="explanation"
+                                  id="explanation"
+                                  rows="3"
+                                  class="w-full rounded-md border-gray-300"
+                                  placeholder="Expliquez pourquoi cette réponse est correcte">{{ old('explanation') }}</textarea>
+                        <p class="text-sm text-gray-500 mt-1">Sera affichée après que l'étudiant ait répondu</p>
                     </div>
 
-                    {{-- Bouton soumettre --}}
-                    <div class="flex justify-end">
-                        <button
-                            type="submit"
-                            class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold">
-                            ✅ Créer la Question
+                    <!-- Points -->
+                    <div class="mb-6">
+                        <label for="points" class="block text-sm font-medium text-gray-700 mb-2">
+                            Points *
+                        </label>
+                        <input type="number"
+                               name="points"
+                               id="points"
+                               value="{{ old('points', 1) }}"
+                               min="1"
+                               class="w-full rounded-md border-gray-300"
+                               required>
+                    </div>
+
+                    <!-- Ordre -->
+                    <div class="mb-6">
+                        <label for="order" class="block text-sm font-medium text-gray-700 mb-2">
+                            Ordre d'affichage
+                        </label>
+                        <input type="number"
+                               name="order"
+                               id="order"
+                               value="{{ old('order', $quiz->questions->count() + 1) }}"
+                               min="1"
+                               class="w-full rounded-md border-gray-300">
+                    </div>
+
+                    <!-- Boutons -->
+                    <div class="flex gap-4">
+                        <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700">
+                            Créer la question
                         </button>
+                        <a href="{{ route('quizzes.edit', $quiz->id) }}"
+                           class="bg-gray-300 text-gray-700 px-6 py-2 rounded-md hover:bg-gray-400">
+                            Annuler
+                        </a>
                     </div>
                 </form>
+            </div>
+
+            <!-- Aide -->
+            <div class="bg-blue-50 rounded-lg p-6 mt-6">
+                <h3 class="font-bold text-blue-900 mb-3">💡 Conseils</h3>
+                <ul class="space-y-2 text-sm text-blue-800">
+                    <li>• <strong>QCM :</strong> Créez au moins 2 options et cochez la bonne réponse</li>
+                    <li>• <strong>Vrai/Faux :</strong> Simple et rapide pour tester des affirmations</li>
+                    <li>• <strong>Texte :</strong> Pour des réponses ouvertes (correction manuelle possible)</li>
+                    <li>• <strong>Explication :</strong> Ajoutez toujours une explication pédagogique</li>
+                </ul>
             </div>
         </div>
     </div>
 
-    {{-- JAVASCRIPT --}}
     <script>
-        // Ignorer l'erreur "Permission denied" de PHPStorm
-        window.onerror = function(message) {
-            if (message.includes('Permission denied')) {
-                return true;
-            }
-        };
-
         let optionCount = 2;
 
-        // Afficher/masquer les sections
-        function updateAnswerFields() {
+        function toggleQuestionType() {
             const type = document.getElementById('type').value;
-            const qcmSection = document.getElementById('qcm_section');
-            const simpleSection = document.getElementById('simple_section');
 
-            console.log('🔄 Type:', type);
+            // Cacher tous les champs spécifiques
+            document.getElementById('multipleChoiceOptions').classList.add('hidden');
+            document.getElementById('trueFalseAnswer').classList.add('hidden');
+            document.getElementById('textAnswer').classList.add('hidden');
 
-            if (!qcmSection || !simpleSection) {
-                console.error('❌ Sections introuvables !');
-                return;
+            // Afficher le champ approprié
+            if (type === 'multiple_choice') {
+                document.getElementById('multipleChoiceOptions').classList.remove('hidden');
+                document.querySelectorAll('input[name="options[]"]').forEach(input => input.required = true);
+            } else if (type === 'true_false') {
+                document.getElementById('trueFalseAnswer').classList.remove('hidden');
+                document.querySelectorAll('input[name="correct_answer"]').forEach(input => input.required = true);
+            } else if (type === 'text') {
+                document.getElementById('textAnswer').classList.remove('hidden');
             }
+        }
+
+        function addOption() {
+            const container = document.getElementById('optionsContainer');
+            const newOption = document.createElement('div');
+            newOption.className = 'flex gap-2 items-center option-row';
+            newOption.innerHTML = `
+                <input type="radio" name="correct_option" value="${optionCount}" class="mt-1">
+                <input type="text"
+                       name="options[]"
+                       placeholder="Option ${optionCount + 1}"
+                       class="flex-1 rounded-md border-gray-300"
+                       required>
+                <button type="button"
+                        onclick="removeOption(this)"
+                        class="bg-red-500 text-white px-3 py-2 rounded-md hover:bg-red-600">
+                    ✕
+                </button>
+            `;
+            container.appendChild(newOption);
+            optionCount++;
+
+            // Afficher les boutons de suppression si plus de 2 options
+            updateRemoveButtons();
+        }
+
+        function removeOption(button) {
+            const row = button.closest('.option-row');
+            row.remove();
+
+            // Réindexer les options
+            document.querySelectorAll('.option-row').forEach((row, index) => {
+                row.querySelector('input[type="radio"]').value = index;
+                row.querySelector('input[type="text"]').placeholder = `Option ${index + 1}`;
+            });
+
+            optionCount = document.querySelectorAll('.option-row').length;
+            updateRemoveButtons();
+        }
+
+        function updateRemoveButtons() {
+            const rows = document.querySelectorAll('.option-row');
+            rows.forEach(row => {
+                const removeBtn = row.querySelector('button[onclick*="removeOption"]');
+                if (rows.length <= 2) {
+                    removeBtn.classList.add('hidden');
+                } else {
+                    removeBtn.classList.remove('hidden');
+                }
+            });
+        }
+
+        // Validation du formulaire
+        document.getElementById('questionForm').addEventListener('submit', function(e) {
+            const type = document.getElementById('type').value;
 
             if (type === 'multiple_choice') {
-                qcmSection.classList.remove('hidden');
-                simpleSection.classList.add('hidden');
-                console.log('✅ QCM affiché');
-            } else if (type === 'true_false' || type === 'short_answer') {
-                qcmSection.classList.add('hidden');
-                simpleSection.classList.remove('hidden');
-                console.log('✅ Réponse simple affichée');
-            } else {
-                qcmSection.classList.add('hidden');
-                simpleSection.classList.add('hidden');
-            }
-        }
-
-        // Ajouter une option
-        function addOption() {
-            const list = document.getElementById('optionsList');
-            const div = document.createElement('div');
-            div.id = `option_${optionCount}`;
-            div.className = 'flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200';
-            div.innerHTML = `
-            <span class="text-gray-600 font-medium w-6">${String.fromCharCode(65 + optionCount)})</span>
-            <input type="text" data-option-text="${optionCount}" placeholder="Option ${optionCount + 1}"
-                   class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
-            <label class="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="correct_option_radio" value="${optionCount}" class="w-4 h-4 text-green-600">
-                <span class="text-sm text-gray-700">✅ Correct</span>
-            </label>
-            <button type="button" onclick="removeOption(${optionCount})" class="text-red-500 hover:text-red-700">🗑️</button>
-        `;
-            list.appendChild(div);
-            optionCount++;
-        }
-
-        // Supprimer une option
-        function removeOption(index) {
-            document.getElementById(`option_${index}`).remove();
-        }
-
-        // Soumettre le formulaire
-        document.addEventListener('DOMContentLoaded', function() {
-            const typeSelect = document.getElementById('type');
-            typeSelect.addEventListener('change', updateAnswerFields);
-            updateAnswerFields();
-
-            document.getElementById('questionForm').addEventListener('submit', function(e) {
-                const type = document.getElementById('type').value;
-
-                if (type === 'multiple_choice') {
-                    const options = [];
-                    document.querySelectorAll('[data-option-text]').forEach(input => {
-                        if (input.value.trim()) {
-                            options.push(input.value.trim());
-                        }
-                    });
-
-                    const correctRadio = document.querySelector('input[name="correct_option_radio"]:checked');
-                    if (!correctRadio || options.length < 2) {
-                        e.preventDefault();
-                        alert('⚠️ Ajoutez au moins 2 options et cochez la bonne réponse !');
-                        return false;
-                    }
-
-                    const jsonData = {
-                        options: options,
-                        correct: parseInt(correctRadio.value)
-                    };
-
-                    console.log('✅ JSON:', jsonData);
-
-                    const hiddenInput = document.createElement('input');
-                    hiddenInput.type = 'hidden';
-                    hiddenInput.name = 'correct_answer';
-                    hiddenInput.value = JSON.stringify(jsonData);
-                    this.appendChild(hiddenInput);
-
-                } else if (type === 'true_false' || type === 'short_answer') {
-                    const simpleAnswer = document.getElementById('simple_answer')?.value.trim();
-
-                    if (!simpleAnswer) {
-                        e.preventDefault();
-                        alert('⚠️ Entrez la bonne réponse !');
-                        return false;
-                    }
-
-                    const hiddenInput = document.createElement('input');
-                    hiddenInput.type = 'hidden';
-                    hiddenInput.name = 'correct_answer';
-                    hiddenInput.value = simpleAnswer;
-                    this.appendChild(hiddenInput);
+                const checkedRadio = document.querySelector('input[name="correct_option"]:checked');
+                if (!checkedRadio) {
+                    e.preventDefault();
+                    alert('Veuillez sélectionner la bonne réponse pour le QCM.');
+                    return false;
                 }
+            }
 
-                return true;
-            });
+            if (type === 'true_false') {
+                const checkedAnswer = document.querySelector('input[name="correct_answer"]:checked');
+                if (!checkedAnswer) {
+                    e.preventDefault();
+                    alert('Veuillez sélectionner la bonne réponse (Vrai ou Faux).');
+                    return false;
+                }
+            }
+        });
+
+        // Initialiser l'affichage au chargement si old() a une valeur
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleQuestionType();
         });
     </script>
-@endsection
+</x-app-layout>

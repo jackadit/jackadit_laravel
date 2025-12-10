@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             // ============================================
             CategorySeeder::class,
             CourseSeeder::class,
+            SectionSeeder::class,
             LessonSeeder::class,
 
             // ============================================
@@ -33,7 +34,7 @@ class DatabaseSeeder extends Seeder
             // ============================================
             EnrollmentSeeder::class,
             QuizAttemptSeeder::class,
-            UserQuizAnswerSeeder::class,
+            QuizAnswerSeeder::class,
         ]);
     }
 }

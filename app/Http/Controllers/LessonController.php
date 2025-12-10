@@ -310,7 +310,7 @@ class LessonController extends Controller implements HasMiddleware
             'video_url' => 'nullable|url',
             'video' => 'nullable|file|mimetypes:video/mp4,video/mpeg,video/quicktime|max:102400',
             'document' => 'nullable|file|mimes:pdf,doc,docx,ppt,pptx|max:10240',
-            'duration' => 'nullable|integer|min:1',
+            'duration_minutes' => 'nullable|integer|min:1',
             'order' => 'required|integer|min:0',
             'is_free' => 'boolean',
             'is_published' => 'boolean',

@@ -36,7 +36,6 @@ class AnswerSeeder extends Seeder
             Question::TYPE_SINGLE_CHOICE => $this->createSingleChoiceAnswers($question),
             Question::TYPE_MULTIPLE_CHOICE => $this->createMultipleChoiceAnswers($question),
             Question::TYPE_TRUE_FALSE => $this->createTrueFalseAnswers($question),
-            Question::TYPE_SHORT_ANSWER => $this->createShortAnswers($question),
             default => null,
         };
     }

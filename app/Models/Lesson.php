@@ -6,68 +6,76 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Lesson extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
+
+    // ========================================
+    // 🔧 CONFIGURATION
+    // ========================================
 
     protected $fillable = [
         'course_id',
+        'section_id',
         'title',
         'slug',
         'description',
-        'content_type',      // text, video, pdf, quiz
-        'content',           // Contenu texte/HTML
-        'video_url',         // URL Vimeo/YouTube
-        'document_path',     // Chemin vers PDF
-        'duration',          // En minutes
-        'order',             // Position dans le cours
-        'is_free',           // Aperçu gratuit
-        'is_published',      // Publié ou brouillon
+        'content',
+        'order',
+        'type',                  // 'video', 'text', 'quiz', 'file'
+        'video_url',
+        'duration_minutes',
+        'file_path',
+        'is_free',
+        'is_published',
+        'is_preview',            // ✅ Leçon visible en prévisualisation
     ];
 
-    protected $casts = [
-        'is_free' => 'boolean',
-        'is_published' => 'boolean',
-        'duration' => 'integer',
-        'order' => 'integer',
-    ];
+    /**
+     * ✅ MODERNE : Méthode casts() (Laravel 11+)
+     */
+    protected function casts(): array
+    {
+        return [
+            'is_free' => 'boolean',
+            'is_published' => 'boolean',
+            'is_preview' => 'boolean',
+            'duration_minutes' => 'integer',
+            'order' => 'integer',
+        ];
+    }
 
-    // ============================================
-    // AUTO-GÉNÉRATION (slug + order)
-    // ============================================
+    // ========================================
+    // 🎯 BOOT (AUTO-GÉNÉRATION DU SLUG)
+    // ========================================
+
     protected static function boot()
     {
         parent::boot();
 
         static::creating(function ($lesson) {
-            // 1. Génération du slug
             if (empty($lesson->slug)) {
                 $lesson->slug = Str::slug($lesson->title);
             }
-
-            // 2. Auto-incrémentation de l'ordre
-            if ($lesson->order === 0 || $lesson->order === null) {
-                $maxOrder = static::where('course_id', $lesson->course_id)->max('order');
-                $lesson->order = $maxOrder ? $maxOrder + 1 : 1;
-            }
         });
 
+        // ✅ AMÉLIORATION : Régénère aussi à l'update
         static::updating(function ($lesson) {
-            // Mise à jour du slug si le titre change
-            if ($lesson->isDirty('title')) {
+            if ($lesson->isDirty('title') && empty($lesson->slug)) {
                 $lesson->slug = Str::slug($lesson->title);
             }
         });
     }
 
-    // ============================================
-    // RELATIONS
-    // ============================================
+    // ========================================
+    // 🔗 RELATIONS (AVEC TYPE HINTS)
+    // ========================================
 
     /**
-     * Relation : Une leçon appartient à un cours
+     * 📚 Cours parent
      */
     public function course(): BelongsTo
     {
@@ -75,19 +83,35 @@ class Lesson extends Model
     }
 
     /**
-     * Relation : Une leçon peut avoir plusieurs quiz
+     * 📂 Section parente (optionnelle)
+     */
+    public function section(): BelongsTo
+    {
+        return $this->belongsTo(Section::class);
+    }
+
+    /**
+     * ✅ Complétions (lesson_completions)
+     */
+    public function completions(): HasMany
+    {
+        return $this->hasMany(LessonCompletion::class);
+    }
+
+    /**
+     * 📝 Quiz associés à cette leçon
      */
     public function quizzes(): HasMany
     {
         return $this->hasMany(Quiz::class);
     }
 
-    // ============================================
-    // SCOPES
-    // ============================================
+    // ========================================
+    // 🔎 SCOPES
+    // ========================================
 
     /**
-     * Scope : Leçons publiées
+     * ✅ Scope : Leçons publiées
      */
     public function scopePublished($query)
     {
@@ -95,7 +119,7 @@ class Lesson extends Model
     }
 
     /**
-     * Scope : Leçons gratuites
+     * 🆓 Scope : Leçons gratuites
      */
     public function scopeFree($query)
     {
@@ -103,7 +127,15 @@ class Lesson extends Model
     }
 
     /**
-     * Scope : Ordonner par ordre
+     * 🎬 Scope : Leçons de prévisualisation
+     */
+    public function scopePreview($query)
+    {
+        return $query->where('is_preview', true);
+    }
+
+    /**
+     * 📊 Scope : Tri par ordre
      */
     public function scopeOrdered($query)
     {
@@ -111,147 +143,252 @@ class Lesson extends Model
     }
 
     /**
-     * Scope : Leçons d'un cours spécifique
+     * 🎥 Scope : Leçons vidéo
      */
-    public function scopeOfCourse($query, $courseId)
+    public function scopeVideos($query)
     {
-        return $query->where('course_id', $courseId);
+        return $query->where('type', 'video');
     }
 
     /**
-     * Scope : Leçons par type de contenu
+     * 📄 Scope : Leçons texte
      */
-    public function scopeOfType($query, $type)
+    public function scopeTexts($query)
     {
-        return $query->where('content_type', $type);
+        return $query->where('type', 'text');
     }
 
-    // ============================================
-    // ACCESSORS
-    // ============================================
+    // ========================================
+    // 🛠️ ACCESSORS (ATTRIBUTS CALCULÉS)
+    // ========================================
 
     /**
-     * Accessor : Durée formatée (ex: "1h 30min")
+     * ⏱️ Durée formatée (ex: "1h 30min" ou "45 min")
      */
-    public function getFormattedDurationAttribute()
+    public function getDurationFormattedAttribute(): string
     {
-        if (!$this->duration) {
-            return 'N/A';
+        if (!$this->duration_minutes) {
+            return '0 min';
         }
 
-        $hours = floor($this->duration / 60);
-        $minutes = $this->duration % 60;
-
-        if ($hours > 0) {
-            return $hours . 'h ' . $minutes . 'min';
+        if ($this->duration_minutes < 60) {
+            return $this->duration_minutes . ' min';
         }
 
-        return $minutes . 'min';
+        $hours = floor($this->duration_minutes / 60);
+        $minutes = $this->duration_minutes % 60;
+
+        return $hours . 'h' . ($minutes > 0 ? ' ' . $minutes . 'min' : '');
     }
 
     /**
-     * ✅ Accessor : Icône du type de contenu
+     * ✅ Vérifie si l'utilisateur connecté a complété cette leçon
      */
-    public function getContentIconAttribute()
+    public function getIsCompletedAttribute(): bool
     {
-        return match($this->content_type) {
+        if (!auth()->check()) {
+            return false;
+        }
+
+        return $this->completions()
+            ->where('user_id', auth()->id())
+            ->where('is_completed', true)
+            ->exists();
+    }
+
+    /**
+     * 🎯 Icône selon le type de leçon
+     */
+    public function getTypeIconAttribute(): string
+    {
+        return match($this->type) {
             'video' => '🎥',
-            'text' => '📝',
-            'pdf' => '📄',
+            'text' => '📄',
             'quiz' => '📝',
-            default => '📖',
+            'file' => '📎',
+            default => '📚',
         };
     }
 
     /**
-     * ✅ Accessor : Label lisible du type
+     * 🏷️ Label lisible du type
      */
-    public function getContentTypeLabelAttribute()
+    public function getTypeLabelAttribute(): string
     {
-        return match($this->content_type) {
+        return match($this->type) {
             'video' => 'Vidéo',
             'text' => 'Texte',
-            'pdf' => 'Document PDF',
             'quiz' => 'Quiz',
-            default => 'Contenu',
+            'file' => 'Fichier',
+            default => 'Autre',
         };
     }
 
-    // ============================================
-    // HELPER METHODS
-    // ============================================
+    /**
+     * 📎 URL du fichier (si type = 'file')
+     */
+    public function getFileUrlAttribute(): ?string
+    {
+        if ($this->type !== 'file' || !$this->file_path) {
+            return null;
+        }
+
+        return \Storage::url($this->file_path);
+    }
+
+    // ========================================
+    // 🛠️ HELPERS
+    // ========================================
 
     /**
-     * Vérifie si la leçon a au moins un quiz
+     * 🆓 Vérifie si la leçon est gratuite
      */
-    public function hasQuiz(): bool
+    public function isFree(): bool
     {
-        return $this->quizzes()->exists();
+        return $this->is_free;
     }
 
     /**
-     * Récupère le quiz principal de la leçon (le premier)
+     * ✅ Vérifie si la leçon est publiée
      */
-    public function mainQuiz(): ?Quiz
+    public function isPublished(): bool
     {
-        return $this->quizzes()->first();
+        return $this->is_published;
     }
 
     /**
-     * ✨ NOUVEAU : Navigation - Leçon précédente
+     * 🎬 Vérifie si la leçon est en prévisualisation
      */
-    public function previous(): ?Lesson
+    public function isPreview(): bool
     {
-        return static::where('course_id', $this->course_id)
-            ->where('order', '<', $this->order)
-            ->orderBy('order', 'desc')
+        return $this->is_preview;
+    }
+
+    /**
+     * 🎥 Vérifie si c'est une vidéo
+     */
+    public function isVideo(): bool
+    {
+        return $this->type === 'video';
+    }
+
+    /**
+     * 📄 Vérifie si c'est un texte
+     */
+    public function isText(): bool
+    {
+        return $this->type === 'text';
+    }
+
+    /**
+     * 📝 Vérifie si c'est un quiz
+     */
+    public function isQuiz(): bool
+    {
+        return $this->type === 'quiz';
+    }
+
+    /**
+     * ✅ Vérifie si un utilisateur a complété cette leçon
+     */
+    public function isCompletedBy(User $user): bool
+    {
+        return $this->completions()
+            ->where('user_id', $user->id)
+            ->where('is_completed', true)
+            ->exists();
+    }
+
+    public function isCompletedByUser(?int $userId = null): bool
+    {
+        $user = $userId ? User::find($userId) : auth()->user();
+        return $user ? $this->isCompletedBy($user) : false;
+    }
+
+    /**
+     * ✅ Marque comme complétée pour l'utilisateur connecté
+     */
+    public function markAsCompleted(?User $user = null): void
+    {
+        $user = $user ?? auth()->user();
+
+        if (!$user) {
+            return;
+        }
+
+        // Vérifie si déjà complétée
+        $completion = $this->completions()
+            ->where('user_id', $user->id)
             ->first();
-    }
 
-    /**
-     * ✨ NOUVEAU : Navigation - Leçon suivante
-     */
-    public function next(): ?Lesson
-    {
-        return static::where('course_id', $this->course_id)
-            ->where('order', '>', $this->order)
-            ->orderBy('order', 'asc')
+        if ($completion) {
+            // Met à jour si déjà existe
+            $completion->update([
+                'is_completed' => true,
+                'completed_at' => now(),
+            ]);
+        } else {
+            // Crée une nouvelle completion
+            $this->completions()->create([
+                'user_id' => $user->id,
+                'is_completed' => true,
+                'completed_at' => now(),
+            ]);
+        }
+
+        // 🔄 Met à jour la progression du cours
+        $enrollment = Enrollment::where('user_id', $user->id)
+            ->where('course_id', $this->course_id)
             ->first();
+
+        if ($enrollment) {
+            $enrollment->updateProgress();
+        }
     }
 
     /**
-     * ✨ NOUVEAU : Vérifie si c'est la première leçon du cours
+     * ❌ Marque comme non complétée
      */
-    public function isFirst(): bool
+    public function markAsIncomplete(?User $user = null): void
     {
-        return $this->order === 1;
+        $user = $user ?? auth()->user();
+
+        if (!$user) {
+            return;
+        }
+
+        $this->completions()
+            ->where('user_id', $user->id)
+            ->update([
+                'is_completed' => false,
+                'completed_at' => null,
+            ]);
+
+        // 🔄 Met à jour la progression du cours
+        $enrollment = Enrollment::where('user_id', $user->id)
+            ->where('course_id', $this->course_id)
+            ->first();
+
+        if ($enrollment) {
+            $enrollment->updateProgress();
+        }
     }
 
     /**
-     * ✨ NOUVEAU : Vérifie si c'est la dernière leçon du cours
+     * 📊 Taux de complétion (% d'utilisateurs ayant complété)
      */
-    public function isLast(): bool
+    public function getCompletionRate(): float
     {
-        $maxOrder = static::where('course_id', $this->course_id)->max('order');
-        return $this->order === $maxOrder;
-    }
+        $totalEnrollments = Enrollment::where('course_id', $this->course_id)->count();
 
-    /**
-     * URL vers la page de la leçon
-     */
-    public function url(): string
-    {
-        return route('courses.lessons.show', [
-            'course' => $this->course_id,
-            'lesson' => $this->id
-        ]);
-    }
+        if ($totalEnrollments === 0) {
+            return 0;
+        }
 
-    /**
-     * Vérifie si la leçon est accessible (publiée OU gratuite)
-     */
-    public function isAccessible(): bool
-    {
-        return $this->is_published || $this->is_free;
+        $completedCount = $this->completions()
+            ->where('is_completed', true)
+            ->count();
+
+        return round(($completedCount / $totalEnrollments) * 100, 2);
     }
 }

@@ -18,33 +18,25 @@ class QuizAttempt extends Model
     protected $fillable = [
         'user_id',
         'quiz_id',
-        'status',
+        'enrollment_id',
+        'attempt_number',
         'score',
-        'correct_answers',
-        'max_score',
-        'percentage',
-        'total_questions',
-        'passed',
-        'time_spent',
+        'is_passed',
         'started_at',
         'completed_at',
+        'time_spent',
         'ip_address',
         'user_agent',
-        'answers_summary',
+        'answers',
     ];
 
     protected $casts = [
-        'status' => 'string',
-        'score' => 'integer',
-        'correct_answers' => 'integer',
-        'max_score' => 'integer',
-        'percentage' => 'decimal:2',
-        'total_questions' => 'integer',
-        'passed' => 'boolean',
-        'time_spent' => 'integer',
+        'score' => 'decimal:2',
+        'is_passed' => 'boolean',
         'started_at' => 'datetime',
         'completed_at' => 'datetime',
-        'answers_summary' => 'array',
+        'time_spent' => 'integer',
+        'answers' => 'array',
     ];
 
     // ============================================
@@ -61,13 +53,18 @@ class QuizAttempt extends Model
         return $this->belongsTo(Quiz::class);
     }
 
+    public function enrollment(): BelongsTo
+    {
+        return $this->belongsTo(Enrollment::class);
+    }
+
     /**
      * Réponses données durant cette tentative
      * ✅ RELATION PRINCIPALE
      */
-    public function userQuizAnswers(): HasMany
+    public function quizAnswers(): HasMany
     {
-        return $this->hasMany(UserQuizAnswer::class);
+        return $this->hasMany(QuizAnswer::class);
     }
 
     // ============================================
@@ -124,7 +121,7 @@ class QuizAttempt extends Model
         $totalQuestions = $quiz->questions()->count();
 
         // ✅ Utilisation de la bonne relation
-        $correctAnswers = $this->userQuizAnswers()
+        $correctAnswers = $this->quizAnswers()
             ->where('is_correct', true)
             ->count();
 
@@ -132,7 +129,7 @@ class QuizAttempt extends Model
         $maxScore = $quiz->questions()->sum('points') ?: $totalQuestions;
 
         // ✅ Utilisation de la bonne relation
-        $score = $this->userQuizAnswers()->sum('points_earned');
+        $score = $this->quizAnswers()->sum('points_earned');
 
         $percentage = $maxScore > 0
             ? round(($score / $maxScore) * 100, 2)

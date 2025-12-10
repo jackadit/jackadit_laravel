@@ -21,36 +21,60 @@ class CourseController extends Controller implements HasMiddleware
     }
 
     /**
-     * Liste publique des cours (accessible à tous)
+     * Liste publique des cours avec filtres avancés
      */
     public function index(Request $request)
     {
         $query = Course::where('is_published', true)
             ->with(['instructor', 'category']);
 
-        // Filtre par catégorie
-        if ($request->has('category')) {
-            $query->whereHas('category', function ($q) use ($request) {
-                $q->where('slug', $request->category);
-            });
-        }
-
-        // Filtre par niveau
-        if ($request->has('level') && $request->level != '') {
-            $query->where('level', $request->level);
-        }
-
-        // Recherche par titre ou description
-        if ($request->has('search') && $request->search != '') {
-            $search = $request->search;
+        // 🔍 Recherche
+        if ($search = $request->input('search')) {
             $query->where(function($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%");
             });
         }
 
-        // Tri
-        $sort = $request->get('sort', 'latest');
+        // 📂 Filtre par catégorie (ID ou slug)
+        if ($categoryFilter = $request->input('category')) {
+            if (is_numeric($categoryFilter)) {
+                $query->where('category_id', $categoryFilter);
+            } else {
+                $query->whereHas('category', function ($q) use ($categoryFilter) {
+                    $q->where('slug', $categoryFilter);
+                });
+            }
+        }
+
+        // 📊 Filtre par niveau
+        if ($level = $request->input('level')) {
+            $query->where('difficulty_level', $level);
+        }
+
+        // 💰 Filtre par prix
+        if ($priceFilter = $request->input('price')) {
+            switch ($priceFilter) {
+                case 'free':
+                    $query->where('price', 0);
+                    break;
+                case 'paid':
+                    $query->where('price', '>', 0);
+                    break;
+                case 'under_50':
+                    $query->whereBetween('price', [0.01, 50]);
+                    break;
+                case 'under_100':
+                    $query->whereBetween('price', [0.01, 100]);
+                    break;
+                case 'over_100':
+                    $query->where('price', '>', 100);
+                    break;
+            }
+        }
+
+        // 🔃 Tri
+        $sort = $request->input('sort', 'newest');
         switch ($sort) {
             case 'popular':
                 $query->withCount('enrollments')->orderBy('enrollments_count', 'desc');
@@ -61,65 +85,93 @@ class CourseController extends Controller implements HasMiddleware
             case 'price_high':
                 $query->orderBy('price', 'desc');
                 break;
+            case 'newest':
             default:
                 $query->latest();
+                break;
         }
 
+        // ✅ Pagination
         $courses = $query->paginate(12);
 
-        // Données pour les filtres
+        // ✅ CORRECTION FINALE : Sans HAVING
         $categories = Category::where('is_active', true)
+            ->whereHas('courses', function($q) {
+                $q->where('is_published', true);
+            })
             ->withCount(['courses' => function($q) {
                 $q->where('is_published', true);
             }])
+            ->orderBy('name')
             ->get();
 
-        return view('courses.index', compact('courses', 'categories'));
+        return view('courses.index', compact('categories', 'courses'));
     }
 
     /**
      * Détail public d'un cours
      */
-    public function show(Course $course)
+    public function show($slugOrId)
     {
-        // Vérifier si le cours est publié (sauf si l'utilisateur est le propriétaire)
-        if (!$course->is_published && (!auth()->check() || auth()->id() !== $course->instructor_id)) {
-            abort(404);
+        // Support slug OU id
+        $course = is_numeric($slugOrId)
+            ? Course::findOrFail($slugOrId)
+            : Course::where('slug', $slugOrId)->firstOrFail();
+
+        // Vérifier si publié (sauf pour le propriétaire ou admin)
+        if (!$course->is_published) {
+            if (!auth()->check() ||
+                (auth()->id() !== $course->instructor_id && !$this->isAdmin())) {
+                abort(404);
+            }
         }
 
-        // Charger les relations
+        // Charger les relations avec ordre
         $course->load([
             'instructor',
             'category',
-            'lessons' => function ($query) {
+            'sections.lessons' => function ($query) {
                 $query->orderBy('order');
             },
             'quizzes'
         ]);
 
-        // Vérifier si l'utilisateur est inscrit
-        $is_enrolled = auth()->check() && $course->enrollments()
+        // Vérifier inscription
+        $isEnrolled = auth()->check() && $course->enrollments()
                 ->where('user_id', auth()->id())
                 ->exists();
 
+        // Calculer progression si inscrit
+        $progress = 0;
+        if ($isEnrolled && auth()->check()) {
+            $totalLessons = $course->sections->sum(fn($s) => $s->lessons->count());
+            if ($totalLessons > 0) {
+                $completedLessons = auth()->user()
+                    ->completedLessons()
+                    ->whereIn('lesson_id', $course->sections->pluck('lessons')->flatten()->pluck('id'))
+                    ->count();
+                $progress = round(($completedLessons / $totalLessons) * 100);
+            }
+        }
+
         // Cours similaires (même catégorie)
-        $similar_courses = Course::where('is_published', true)
+        $similarCourses = Course::where('is_published', true)
             ->where('category_id', $course->category_id)
             ->where('id', '!=', $course->id)
             ->with(['instructor', 'category'])
+            ->withCount('enrollments')
             ->limit(3)
             ->get();
 
-        return view('courses.show', compact('course', 'similar_courses', 'is_enrolled'));
+        return view('courses.show', compact('course', 'similarCourses', 'isEnrolled', 'progress'));
     }
-
 
     /**
      * Formulaire de création
      */
     public function create()
     {
-        $categories = Category::all();
+        $categories = Category::where('is_active', true)->orderBy('name')->get();
         return view('courses.create', compact('categories'));
     }
 
@@ -150,11 +202,11 @@ class CourseController extends Controller implements HasMiddleware
         }
 
         $validated['instructor_id'] = auth()->id();
-        $validated['is_published'] = $request->boolean('is_published');
+        $validated['is_published'] = $request->boolean('is_published', false);
 
         $course = Course::create($validated);
 
-        return redirect()->route('courses.show', $course)
+        return redirect()->route('courses.show', $course->slug)
             ->with('success', '✅ Cours créé avec succès !');
     }
 
@@ -163,12 +215,7 @@ class CourseController extends Controller implements HasMiddleware
      */
     public function edit(Course $course)
     {
-        // ✅ Vérification manuelle si pas de Policy
-        if (auth()->id() !== $course->instructor_id && !auth()->user()->hasRole('admin')) {
-            abort(403, 'Action non autorisée.');
-        }
-
-        $categories = Category::all();
+        $categories = Category::where('is_active', true)->orderBy('name')->get();
         return view('courses.edit', compact('course', 'categories'));
     }
 
@@ -177,11 +224,6 @@ class CourseController extends Controller implements HasMiddleware
      */
     public function update(Request $request, Course $course)
     {
-        // ✅ Vérification manuelle
-        if (auth()->id() !== $course->instructor_id && !auth()->user()->hasRole('admin')) {
-            abort(403, 'Action non autorisée.');
-        }
-
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string|min:50',
@@ -208,11 +250,11 @@ class CourseController extends Controller implements HasMiddleware
                 ->store('courses/thumbnails', 'public');
         }
 
-        $validated['is_published'] = $request->boolean('is_published');
+        $validated['is_published'] = $request->boolean('is_published', $course->is_published);
 
         $course->update($validated);
 
-        return redirect()->route('courses.show', $course)
+        return redirect()->route('courses.show', $course->slug)
             ->with('success', '✅ Cours mis à jour avec succès !');
     }
 
@@ -221,9 +263,9 @@ class CourseController extends Controller implements HasMiddleware
      */
     public function destroy(Course $course)
     {
-        // ✅ Vérification manuelle
-        if (auth()->id() !== $course->instructor_id && !auth()->user()->hasRole('admin')) {
-            abort(403, 'Action non autorisée.');
+        // Empêcher la suppression si des étudiants sont inscrits
+        if ($course->enrollments()->count() > 0) {
+            return back()->with('error', '❌ Impossible de supprimer un cours avec des étudiants inscrits.');
         }
 
         // Nettoyage fichiers
@@ -238,7 +280,34 @@ class CourseController extends Controller implements HasMiddleware
     }
 
     /**
-     * ✅ MÉTHODE UTILITAIRE : Génération slug unique
+     * Liste des cours du formateur connecté
+     */
+    public function instructorIndex()
+    {
+        $courses = Course::where('instructor_id', auth()->id())
+            ->withCount('enrollments')
+            ->latest()
+            ->paginate(12);
+
+        return view('instructor.courses.index', compact('courses'));
+    }
+
+    /**
+     * Détail d'un cours (vue formateur)
+     */
+    public function instructorShow(Course $course)
+    {
+        $course->load([
+            'sections.lessons' => fn($q) => $q->orderBy('order'),
+            'enrollments' => fn($q) => $q->with('user')->latest(),
+            'category'
+        ]);
+
+        return view('instructor.courses.show', compact('course'));
+    }
+
+    /**
+     * 🔧 Méthode utilitaire : Génération slug unique
      */
     private function generateUniqueSlug(string $title, ?int $excludeId = null): string
     {
@@ -246,19 +315,27 @@ class CourseController extends Controller implements HasMiddleware
         $originalSlug = $slug;
         $counter = 1;
 
-        $query = Course::where('slug', $slug);
-        if ($excludeId) {
-            $query->where('id', '!=', $excludeId);
-        }
-
-        while ($query->exists()) {
-            $slug = $originalSlug . '-' . $counter++;
+        while (true) {
             $query = Course::where('slug', $slug);
             if ($excludeId) {
                 $query->where('id', '!=', $excludeId);
             }
+
+            if (!$query->exists()) {
+                break;
+            }
+
+            $slug = $originalSlug . '-' . $counter++;
         }
 
         return $slug;
+    }
+
+    /**
+     * 🔧 Helper : Vérifier si admin
+     */
+    private function isAdmin(): bool
+    {
+        return auth()->check() && auth()->user()->role === 'admin';
     }
 }

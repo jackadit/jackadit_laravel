@@ -6,10 +6,10 @@ use App\Models\User;
 use App\Models\QuizAttempt;
 use App\Models\Question;
 use App\Models\Answer;
-use App\Models\UserQuizAnswer;
+use App\Models\QuizAnswer;
 use Illuminate\Database\Seeder;
 
-class UserQuizAnswerSeeder extends Seeder
+class QuizAnswerSeeder extends Seeder
 {
     /**
      * Seed the user_quiz_answers table.
@@ -29,8 +29,8 @@ class UserQuizAnswerSeeder extends Seeder
             $this->createAnswersForAttempt($attempt);
         }
 
-        $totalAnswers = UserQuizAnswer::count();
-        $correctAnswers = UserQuizAnswer::where('is_correct', true)->count();
+        $totalAnswers = QuizAnswer::count();
+        $correctAnswers = QuizAnswer::where('is_correct', true)->count();
         $successRate = round(($correctAnswers / $totalAnswers) * 100, 2);
 
         $this->command->info("✅ {$totalAnswers} réponses créées !");
@@ -56,7 +56,7 @@ class UserQuizAnswerSeeder extends Seeder
     private function createAnswerForQuestion(QuizAttempt $attempt, Question $question, int $cumulativeTime): int
     {
         // Vérifier si une réponse existe déjà
-        if (UserQuizAnswer::where('quiz_attempt_id', $attempt->id)
+        if (QuizAnswer::where('quiz_attempt_id', $attempt->id)
             ->where('question_id', $question->id)
             ->exists()) {
             return $cumulativeTime;
@@ -87,12 +87,12 @@ class UserQuizAnswerSeeder extends Seeder
     {
         $selectedAnswer = $question->answers->random();
 
-        UserQuizAnswer::create([
-            'user_id' => $attempt->user_id,
+        QuizAnswer::create([
             'quiz_attempt_id' => $attempt->id,
             'question_id' => $question->id,
-            'answer_id' => $selectedAnswer->id,
-            'user_answer_text' => null,
+            'answer_id' => null, // Pas utilisé pour multiple
+            'selected_answers' => $selectedAnswer->id,
+            'answer_text' => null,
             'is_correct' => $selectedAnswer->is_correct,
             'points_earned' => $selectedAnswer->is_correct ? $question->points : 0,
             'time_taken' => $timeTaken,
@@ -116,7 +116,7 @@ class UserQuizAnswerSeeder extends Seeder
         // 70% de chance d'être correct
         $isCorrect = rand(1, 100) <= 70;
 
-        UserQuizAnswer::create([
+        QuizAnswer::create([
             'user_id' => $attempt->user_id,
             'quiz_attempt_id' => $attempt->id,
             'question_id' => $question->id,

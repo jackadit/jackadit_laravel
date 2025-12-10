@@ -19,9 +19,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => RoleMiddleware::class,
 
             // ✅ Alias spécifiques (utilisent RoleMiddleware)
-            'instructor' => RoleMiddleware::class . ':instructor',
-            'admin' => RoleMiddleware::class . ':admin',
-            'student' => RoleMiddleware::class . ':student',
+            //'instructor' => RoleMiddleware::class . ':instructor',
+            //'admin' => RoleMiddleware::class . ':admin',
+            //'student' => RoleMiddleware::class . ':student',
 
             // ✅ Middlewares cours
             'course.ownership' => CourseOwnershipMiddleware::class,

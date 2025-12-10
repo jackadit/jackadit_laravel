@@ -11,19 +11,20 @@ class RoleMiddleware
     /**
      * ✅ Middleware générique pour vérifier n'importe quel rôle
      */
-    public function handle(Request $request, Closure $next, string $role): Response
+    public function handle(Request $request, Closure $next, string ...$roles): Response
     {
+        // ❌ Non authentifié
         if (!$request->user()) {
-            return redirect()->route('login')->with('error', 'Veuillez vous connecter.');
+            abort(403, 'Non authentifié');
         }
 
-        // Vérification avec Spatie + fallback sur champ 'role'
-        $hasRole = $request->user()->hasRole($role) || $request->user()->role === $role;
-
-        if (!$hasRole) {
-            abort(403, "Accès réservé aux {$role}s.");
+        // ❌ Rôle non autorisé
+        if (!in_array($request->user()->role, $roles)) {
+            abort(403, 'Accès refusé : rôle insuffisant');
         }
 
+        // ✅ Autorisation accordée
         return $next($request);
     }
+
 }

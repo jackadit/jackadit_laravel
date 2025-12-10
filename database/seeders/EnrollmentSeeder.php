@@ -54,11 +54,12 @@ class EnrollmentSeeder extends Seeder
                 Enrollment::create([
                     'user_id' => $student->id,
                     'course_id' => $course->id,
+                    'payment_id' => null,
+                    'status' => $isCompleted ? 'completed' : 'active',
+                    'progress' => $isCompleted ? 100 : rand(10, 90),
                     'enrolled_at' => $enrolledAt,
                     'completed_at' => $isCompleted ? $enrolledAt->copy()->addDays(rand(7, 30)) : null,
-                    'progress_percentage' => $isCompleted ? 100 : rand(10, 90),
                     'last_accessed_at' => now()->subDays(rand(0, 7)),
-                    'status' => $isCompleted ? 'completed' : 'active',
                 ]);
 
                 $enrollmentCount++;

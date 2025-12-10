@@ -46,7 +46,7 @@ return new class extends Migration
                 ->nullable()
                 ->comment('Temps pris pour répondre (en secondes)');
 
-            $table->text('user_answer_text')
+            $table->text('answer_text')
                 ->nullable()
                 ->comment('Texte de réponse (pour questions ouvertes)');
 
